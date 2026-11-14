@@ -1,5 +1,7 @@
 import { Hono, type Context } from "hono";
 import { csrf } from "hono/csrf";
+import { raceResultFileName, raceResultRows, RACERESULT_SHEET } from "../export/raceresult";
+import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort } from "../races/race-dates";
 import { MAX_RACE_NAME_LENGTH, validateRaceInput, type RaceInput, type RaceInputErrors } from "../races/race-input";
@@ -130,6 +132,18 @@ export function adminRoutes(identity: AdminIdentity) {
 
   admin.get("/races/:token", (c) =>
     withRace(c, async (race) => raceRegistrationsPage(c, race, await listRegistrations(c.env.DB, race.id))),
+  );
+
+  admin.get("/races/:token/export.xlsx", (c) =>
+    withRace(c, async (race) => {
+      const workbook = xlsxWorkbook(RACERESULT_SHEET, raceResultRows(await listRegistrations(c.env.DB, race.id)));
+      return c.body(workbook, 200, {
+        "content-type": XLSX_CONTENT_TYPE,
+        "content-disposition": `attachment; filename="${raceResultFileName(race)}"`,
+        // Personal data: never kept by the browser or anything in between.
+        "cache-control": "no-store",
+      });
+    }),
   );
 
   admin.get("/races/:token/registrations/:number/delete", (c) =>

@@ -7,6 +7,9 @@ export type Duration = (typeof DURATIONS)[number];
 export const GENDERS = ["F", "M"] as const;
 export type Gender = (typeof GENDERS)[number];
 
+/** Lowercase w / m, as on the organizers' lists and in RaceResult. */
+export const GENDER_LETTER: Record<Gender, string> = { F: "w", M: "m" };
+
 export const TITLES = ["none", "dr"] as const;
 export type Title = (typeof TITLES)[number];
 

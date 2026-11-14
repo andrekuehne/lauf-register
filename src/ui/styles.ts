@@ -48,6 +48,7 @@ font:inherit;text-align:left;color:var(--fg);background:var(--card);border:2px s
 .btn{display:block;width:100%;min-height:56px;margin:20px 0 0;padding:12px 16px;font:inherit;font-weight:700;font-size:1.1rem;
 color:#fff;background:var(--accent);border:0;border-radius:12px;cursor:pointer}
 .btn:disabled{opacity:.6}
+a.btn{text-align:center;text-decoration:none}
 .btn-secondary{color:var(--accent);background:var(--card);border:2px solid var(--accent)}
 .back{display:block;margin:14px auto 0;padding:12px 16px;font:inherit;color:var(--accent);background:none;border:0;text-decoration:underline;cursor:pointer}
 .person{margin:0 0 16px;padding:12px 16px 16px;background:var(--card);border-radius:14px;border-left:6px solid var(--c)}

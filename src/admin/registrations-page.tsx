@@ -1,7 +1,7 @@
 // The admin page of one Race (its Registrations) and the delete confirmation.
 
 import type { Context } from "hono";
-import { DIVISIONS, divisionOf, type Duration } from "../domain/categories";
+import { DIVISIONS, divisionOf, GENDER_LETTER, type Duration } from "../domain/categories";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, formatRegistrationTime } from "../races/race-dates";
@@ -16,15 +16,13 @@ import { AdminPage, registrationCount } from "./admin-page";
 const t = strings("de").flow;
 
 export const racePath = (race: Race) => `/admin/races/${race.token}`;
+const exportPath = (race: Race) => `${racePath(race)}/export.xlsx`;
 const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
 /** The Race page lists the hour first; Divisions in their usual order (women first, singles before Pairs). */
 const DURATION_ORDER: readonly Duration[] = [60, 30];
 
 const divisionOfRegistration = (registration: StoredRegistration) => divisionOf(registration.participants.map((p) => p.gender));
-
-/** Lowercase, as on the organizers' lists. */
-const GENDER_LETTER = { F: "w", M: "m" } as const;
 
 function fullName(p: ParticipantInput): string {
   return `${p.title === "none" ? "" : `${t.titles[p.title]} `}${p.firstName} ${p.lastName}`;
@@ -79,6 +77,9 @@ function RaceHeader(props: { race: Race; count: number }) {
         {formatRaceDateShort(props.race.date, "de")} · {registrationCount(props.count)} ·{" "}
         {props.race.registrationOpen ? "Anmeldung offen" : "Anmeldung geschlossen"}
       </p>
+      <a href={exportPath(props.race)} class="btn btn-secondary" download>
+        Excel für RaceResult herunterladen
+      </a>
     </>
   );
 }
