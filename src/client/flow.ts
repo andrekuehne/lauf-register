@@ -178,12 +178,25 @@ function personErrors(slot: number): FieldMessages {
   if (slot === 0 && isMixed() && !state.mixedFirstGender) errors.gender = t.genderRequired;
   if (!p.firstName.trim()) errors.firstName = t.required;
   if (!p.lastName.trim()) errors.lastName = t.required;
-  const yearError = birthYearError(p.birthYear, config.raceYear);
-  if (!p.birthYear.trim()) errors.birthYear = t.required;
-  else if (yearError === "future") errors.birthYear = t.birthYearFuture;
-  else if (yearError === "too-early") errors.birthYear = t.birthYearTooEarly;
-  else if (yearError) errors.birthYear = t.birthYearInvalid;
+  const yearMessage = birthYearMessage(p.birthYear, "next");
+  if (yearMessage) errors.birthYear = yearMessage;
   return errors;
+}
+
+/**
+ * The birth-year error for the moment it is checked: while typing, only once it
+ * can't turn into a valid year any more (four digits, or not digits at all);
+ * on leaving the field, also an unfinished year; on "Next", also an empty field.
+ */
+function birthYearMessage(input: string, moment: "typing" | "leaving" | "next"): string | undefined {
+  const value = input.trim();
+  if (!value) return moment === "next" ? t.required : undefined;
+  if (moment === "typing" && /^\d{1,3}$/.test(value)) return undefined;
+  const error = birthYearError(value, config.raceYear);
+  if (error === "future") return t.birthYearFuture;
+  if (error === "too-early") return t.birthYearTooEarly;
+  if (error) return t.birthYearInvalid;
+  return undefined;
 }
 
 function participantComplete(slot: number): boolean {
@@ -601,11 +614,14 @@ all<HTMLInputElement>('[data-field="gender"]', personBox(0)).forEach((radio) => 
     const input = field(slot, name);
     input.oninput = () => {
       p()[name] = input.value;
-      setError(slot, name, undefined);
+      // Birth-year mistakes show at once, like the age hint; other fields are checked on "Next".
+      setError(slot, name, name === "birthYear" ? birthYearMessage(input.value, "typing") : undefined);
       save();
       if (name === "birthYear") renderBirthYearHint(slot);
     };
   });
+  const year = field(slot, "birthYear");
+  year.onblur = () => setError(slot, "birthYear", birthYearMessage(year.value, "leaving"));
   const club = field(slot, "club");
   club.oninput = () => {
     p().club = club.value;
