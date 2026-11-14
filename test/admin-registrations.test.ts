@@ -57,6 +57,31 @@ describe("the Registrations of a Race", () => {
     expect(rows.get(1003)).toMatch(/Anna Muster[\s\S]*\bw\b[\s\S]*Ben Beispiel[\s\S]*\bm\b/);
   });
 
+  it("groups them by Duration (Stundenlauf first), then Division (men, women, then Pairs), by number within a group", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna], 30); // 1
+    await register(race, [ben]); // 2
+    await register(race, [anna, ben]); // 1001
+    await register(race, [anna, clara], 30); // 1002
+    await register(race, [emil]); // 3
+    await register(race, [clara]); // 4
+
+    const rows = await registrationRows(race);
+    const html = await (await asAdmin(adminRacePath(race))).text();
+
+    expect([...rows.keys()]).toEqual([2, 3, 4, 1001, 1, 1002]);
+    const headings = [...html.matchAll(/<h([23])[^>]*>([^<]*)</g)].map((m) => `${m[1]}:${m[2]!.trim()}`);
+    expect(headings).toEqual([
+      "2:Stundenlauf · 4",
+      "3:Männer · 2",
+      "3:Frauen · 1",
+      "3:Mixed-Paar · 1",
+      "2:Halbstundenlauf · 2",
+      "3:Frauen · 1",
+      "3:Frauen-Paar · 1",
+    ]);
+  });
+
   it("is reached from the Race list", async () => {
     const race = await newRace("Stundenlauf");
 

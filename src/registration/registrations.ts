@@ -75,10 +75,10 @@ function groupRows(rows: RegistrationRow[]): StoredRegistration[] {
   return registrations;
 }
 
-/** All Registrations of a Race, newest first. */
+/** All Registrations of a Race, in Registration-number order. */
 export async function listRegistrations(db: D1Database, raceId: number): Promise<StoredRegistration[]> {
   const { results } = await db
-    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? ORDER BY r.created_at DESC, r.id DESC, p.slot`)
+    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? ORDER BY r.number, p.slot`)
     .bind(raceId)
     .all<RegistrationRow>();
   return groupRows(results);

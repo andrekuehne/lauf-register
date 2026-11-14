@@ -1,7 +1,7 @@
 // The admin page of one Race (its Registrations) and the delete confirmation.
 
 import type { Context } from "hono";
-import { divisionOf } from "../domain/categories";
+import { divisionOf, type Division, type Duration } from "../domain/categories";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, formatRegistrationTime } from "../races/race-dates";
@@ -18,6 +18,12 @@ const t = strings("de").flow;
 export const racePath = (race: Race) => `/admin/races/${race.token}`;
 const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
+/** How the Race page groups Registrations, as the organizers read their lists: the hour first, men before women, singles before Pairs. */
+const DURATION_ORDER: readonly Duration[] = [60, 30];
+const DIVISION_ORDER: readonly Division[] = ["men", "women", "mens_pair", "womens_pair", "mixed_pair"];
+
+const divisionOfRegistration = (registration: StoredRegistration) => divisionOf(registration.participants.map((p) => p.gender));
+
 /** Lowercase, as on the organizers' lists. */
 const GENDER_LETTER = { F: "w", M: "m" } as const;
 
@@ -33,7 +39,7 @@ function RegistrationCard(props: {
   deletable?: boolean;
 }) {
   const { race, registration } = props;
-  const division = divisionOf(registration.participants.map((p) => p.gender));
+  const division = divisionOfRegistration(registration);
   return (
     <li class={`card reg div-${division}`} data-registration={registration.number}>
       <div class="reg-head">
@@ -78,21 +84,40 @@ function RaceHeader(props: { race: Race; count: number }) {
   );
 }
 
-/** All Registrations of the Race, newest first, with possible duplicates flagged. */
+/**
+ * All Registrations of the Race, grouped by Duration and then Division (empty
+ * groups left out), in number order within a group; possible duplicates are
+ * flagged across all groups.
+ */
 export function raceRegistrationsPage(c: Context<AppEnv>, race: Race, registrations: StoredRegistration[]) {
   const duplicates = duplicatesOf(registrations);
+  const groups = DURATION_ORDER.map((duration) => {
+    const ofDuration = registrations.filter((r) => r.duration === duration);
+    const divisions = DIVISION_ORDER.map((division) => ({
+      division,
+      registrations: ofDuration.filter((r) => divisionOfRegistration(r) === division),
+    })).filter((group) => group.registrations.length > 0);
+    return { duration, count: ofDuration.length, divisions };
+  }).filter((group) => group.count > 0);
   return c.html(
     <AdminPage url={c.req.url} title={race.name} admin={c.get("adminEmail")}>
       <RaceHeader race={race} count={registrations.length} />
-      {registrations.length === 0 ? (
-        <p class="muted">Noch keine Anmeldungen.</p>
-      ) : (
-        <ul class="reg-list">
-          {registrations.map((registration) => (
-            <RegistrationCard race={race} registration={registration} duplicates={duplicates} deletable />
+      {registrations.length === 0 && <p class="muted">Noch keine Anmeldungen.</p>}
+      {groups.map((group) => (
+        <section class="reg-duration">
+          <h2>{`${t.durations[group.duration].name} · ${group.count}`}</h2>
+          {group.divisions.map(({ division, registrations: inDivision }) => (
+            <>
+              <h3 class={`reg-group div-${division}`}>{`${t.divisions[division].category} · ${inDivision.length}`}</h3>
+              <ul class="reg-list">
+                {inDivision.map((registration) => (
+                  <RegistrationCard race={race} registration={registration} duplicates={duplicates} deletable />
+                ))}
+              </ul>
+            </>
           ))}
-        </ul>
-      )}
+        </section>
+      ))}
     </AdminPage>,
   );
 }

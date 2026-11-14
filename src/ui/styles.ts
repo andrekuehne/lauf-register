@@ -108,6 +108,8 @@ border:2px solid var(--line);border-radius:24px;background:#fff;font-weight:600;
 border:2px solid var(--accent);border-radius:10px;cursor:pointer}
 .race-regs{margin:2px 0 6px;color:var(--accent);font-weight:700}
 .reg-list{list-style:none;margin:0;padding:0}
+.reg-duration h2{margin:28px 0 4px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.reg-group{margin:16px 0 8px;font-size:1.1rem;color:var(--c)}
 .reg{border-left:6px solid var(--c)}
 .reg-head{display:flex;align-items:center;flex-wrap:wrap;margin-bottom:6px}
 .reg-no{min-width:3.2rem;margin-right:10px;font-size:1.5rem;line-height:1.2}
