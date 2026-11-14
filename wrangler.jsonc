@@ -11,8 +11,8 @@
   "observability": { "enabled": true },
   "vars": {
     // Audience (AUD) tag of the Cloudflare Access application that protects /admin.
-    // Empty means nobody can use the admin area. See README → "Admin sign-in".
-    "ACCESS_AUD": ""
+    // Empty would mean nobody can use the admin area. See README → "Admin sign-in".
+    "ACCESS_AUD": "252dddc3338a1f9544ded342244a924313ea653e7ee39c804724df609de4b8a1"
   },
   "access": {
     // Local `npm run dev` only: pretend Access signed this Admin in (matches .dev.vars).
