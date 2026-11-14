@@ -1,7 +1,7 @@
 // The admin page of one Race (its Registrations) and the delete confirmation.
 
 import type { Context } from "hono";
-import { divisionOf, type Division, type Duration } from "../domain/categories";
+import { DIVISIONS, divisionOf, type Duration } from "../domain/categories";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, formatRegistrationTime } from "../races/race-dates";
@@ -18,9 +18,8 @@ const t = strings("de").flow;
 export const racePath = (race: Race) => `/admin/races/${race.token}`;
 const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
-/** How the Race page groups Registrations, as the organizers read their lists: the hour first, men before women, singles before Pairs. */
+/** The Race page lists the hour first; Divisions in their usual order (women first, singles before Pairs). */
 const DURATION_ORDER: readonly Duration[] = [60, 30];
-const DIVISION_ORDER: readonly Division[] = ["men", "women", "mens_pair", "womens_pair", "mixed_pair"];
 
 const divisionOfRegistration = (registration: StoredRegistration) => divisionOf(registration.participants.map((p) => p.gender));
 
@@ -93,7 +92,7 @@ export function raceRegistrationsPage(c: Context<AppEnv>, race: Race, registrati
   const duplicates = duplicatesOf(registrations);
   const groups = DURATION_ORDER.map((duration) => {
     const ofDuration = registrations.filter((r) => r.duration === duration);
-    const divisions = DIVISION_ORDER.map((division) => ({
+    const divisions = DIVISIONS.map((division) => ({
       division,
       registrations: ofDuration.filter((r) => divisionOfRegistration(r) === division),
     })).filter((group) => group.registrations.length > 0);
