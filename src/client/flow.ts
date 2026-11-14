@@ -5,6 +5,8 @@
 // step it was opened from, so the in-app back button never leaves the page. In-progress data sits in sessionStorage.
 
 import {
+  defaultTitle,
+  enteredGenders,
   isDivision,
   isDuration,
   isTitle,
@@ -34,6 +36,8 @@ type Participant = {
   club: string;
   /** The second slot's club follows the first slot's until edited by hand. */
   clubEdited: boolean;
+  /** Until picked by hand, the Title follows the slot (see defaultTitle). */
+  titleChosen: boolean;
 };
 
 const TEXT_FIELDS = ["firstName", "lastName", "birthYear"] as const;
@@ -92,7 +96,7 @@ function newAttemptId(): string {
 }
 
 function emptyParticipant(): Participant {
-  return { title: "none", firstName: "", lastName: "", birthYear: "", club: "", clubEdited: false };
+  return { title: "none", firstName: "", lastName: "", birthYear: "", club: "", clubEdited: false, titleChosen: false };
 }
 
 function freshState(): State {
@@ -119,6 +123,7 @@ function load(): State | null {
     if (saved.duration !== undefined && !isDuration(saved.duration)) return null;
     saved.participants.forEach((p) => {
       if (!isTitle(p.title)) p.title = "none";
+      if (typeof p.titleChosen !== "boolean") p.titleChosen = p.title !== "none";
     });
     return saved;
   } catch (e) {
@@ -128,8 +133,23 @@ function load(): State | null {
 
 // ---------- derived values ----------
 
+/** Fills in the Title of every slot whose Participant hasn't picked one by hand. */
+function applyDefaultTitles() {
+  const division = state.division;
+  if (!division) return;
+  slotGenders(division).forEach((_, slot) => {
+    const p = state.participants[slot]!;
+    if (!p.titleChosen) p.title = defaultTitle(division, slot, state.participants[0].title);
+  });
+}
+
+/** Gender per entered person; a Mixed pair may be entered in either order. */
 function genders(): Gender[] {
-  return state.division ? slotGenders(state.division) : ["F"];
+  return state.division ? enteredGenders(state.division, titles()) : ["F"];
+}
+
+function titles(): Title[] {
+  return state.participants.map((p) => p.title);
 }
 
 function activeParticipants(): Participant[] {
@@ -140,12 +160,15 @@ function isPair(): boolean {
   return genders().length === 2;
 }
 
-/** "Erste Person · Frau" etc.; empty for a single Participant. */
-function slotLabel(slot: number): string {
+/**
+ * "Erste Person", or on the Check screen of a Mixed pair "Erste Person · Mann"
+ * (who is who as derived from the Titles); empty for a single Participant.
+ */
+function slotLabel(slot: number, withGender = false): string {
   if (!isPair()) return "";
   const person = slot === 0 ? t.pairFirst : t.pairSecond;
-  if (state.division !== "mixed_pair") return person;
-  return `${person} · ${slot === 0 ? t.slotWoman : t.slotMan}`;
+  if (!withGender || state.division !== "mixed_pair") return person;
+  return `${person} · ${genders()[slot] === "F" ? t.slotWoman : t.slotMan}`;
 }
 
 function personErrors(p: Participant): FieldMessages {
@@ -169,7 +192,11 @@ function personHints(p: Participant, slot: number): { title?: string; birthYear?
   const hints: { title?: string; birthYear?: string } = {};
   const year = parseBirthYear(p.birthYear, config.raceYear);
   const titleHints: string[] = [];
-  if (titleContradictsSlot(p.title, genders()[slot] || "F")) {
+  if (state.division === "mixed_pair") {
+    // Either order is fine; only two Frau or two Herr can't be a Mixed pair. Shown on both.
+    const first = state.participants[0].title;
+    if (first === state.participants[1].title && (first === "frau" || first === "herr")) titleHints.push(t.mixedTitleCheck);
+  } else if (titleContradictsSlot(p.title, genders()[slot] || "F")) {
     titleHints.push(fill(t.titleCheck, { title: t.titles[p.title] }));
   }
   if (year !== null) {
@@ -380,7 +407,7 @@ function renderCheck() {
   summary.appendChild(el("p", "cat", categoryName()));
   activeParticipants().forEach((p, slot) => {
     const row = el("div", "sum-person");
-    if (isPair()) row.appendChild(el("span", "", slotLabel(slot)));
+    if (isPair()) row.appendChild(el("span", "", slotLabel(slot, true)));
     row.appendChild(el("b", "", displayName(p)));
     const year = parseBirthYear(p.birthYear, config.raceYear);
     if (year !== null) {
@@ -470,10 +497,11 @@ async function submit() {
 /**
  * When the Division changes, entered details move to the slot of matching
  * gender (a man's details never land in a woman's slot); the rest is dropped.
+ * A Mixed pair keeps its entered order; the Titles tell who is who.
  */
 function changeDivision(next: Division) {
   if (state.division && state.division !== next) {
-    const oldGenders = slotGenders(state.division);
+    const oldGenders = genders();
     const old = state.participants.slice(0, oldGenders.length);
     const used = old.map(() => false);
     const moved = slotGenders(next).map((gender, slot) => {
@@ -488,6 +516,7 @@ function changeDivision(next: Division) {
     state.participants = [moved[0] || emptyParticipant(), moved[1] || emptyParticipant()];
   }
   state.division = next;
+  applyDefaultTitles();
 }
 
 function afterChoice() {
@@ -522,7 +551,11 @@ all("[data-back]").forEach((button) => {
   const p = () => state.participants[slot]!;
   all<HTMLInputElement>('[data-field="title"]', box).forEach((radio) => {
     radio.onchange = () => {
-      if (radio.checked && isTitle(radio.value)) p().title = radio.value;
+      if (radio.checked && isTitle(radio.value)) {
+        p().title = radio.value;
+        p().titleChosen = true;
+        applyDefaultTitles();
+      }
       save();
       renderHints(slot);
     };

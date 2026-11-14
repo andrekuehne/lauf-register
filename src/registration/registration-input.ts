@@ -1,7 +1,7 @@
 // The authoritative check of a submitted Registration (the browser shows the
 // same rules inline, see src/domain/participant-checks.ts).
 
-import { isDivision, isDuration, isTitle, slotGenders, type Division, type Duration, type Title } from "../domain/categories";
+import { enteredGenders, isDivision, isDuration, isTitle, slotGenders, type Division, type Duration, type Title } from "../domain/categories";
 import { birthYearError, MAX_TEXT_LENGTH } from "../domain/participant-checks";
 
 export type ParticipantInput = {
@@ -67,9 +67,17 @@ export function validateRegistrationInput(body: unknown, raceYear: number): Regi
   }
 
   if (issues.length > 0) return { ok: false, issues };
+  // A Mixed pair may arrive man first; it is stored woman first (slot 1), so
+  // gender can always be derived from Division + slot.
+  const manFirst = enteredGenders(division as Division, checked.map((p) => p.title))[0] === "M";
   return {
     ok: true,
-    input: { attemptId: attemptId as string, division: division as Division, duration: duration as Duration, participants: checked },
+    input: {
+      attemptId: attemptId as string,
+      division: division as Division,
+      duration: duration as Duration,
+      participants: division === "mixed_pair" && manFirst ? [...checked].reverse() : checked,
+    },
   };
 }
 

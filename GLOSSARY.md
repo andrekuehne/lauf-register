@@ -39,7 +39,7 @@ How a Participant is addressed: one of *–* (none), *Dr.*, *Frau*, *Herr*, *Kid
 _Avoid_: Salutation, prefix
 
 **Pair**:
-Two Participants registered together on one Registration in a pair Division; in a *Mixed pair* the slots are fixed as one woman and one man.
+Two Participants registered together on one Registration in a pair Division; a *Mixed pair* is one woman and one man, entered in either order; their Titles *Frau* and *Herr* tell who is who.
 _Avoid_: Couple, team
 
 **Registration number**:
