@@ -9,6 +9,8 @@
     "watch_dir": "src"
   },
   "observability": { "enabled": true },
+  // No per-version preview links: every version would otherwise stay reachable at its own URL.
+  "preview_urls": false,
   "vars": {
     // Audience (AUD) tag of the Cloudflare Access application that protects /admin.
     // Empty would mean nobody can use the admin area. See README → "Admin sign-in".
