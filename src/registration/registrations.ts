@@ -1,6 +1,17 @@
-// Registrations in D1: storing a submitted Registration with its Participants.
+// Registrations in D1: storing a submitted Registration with its Participants,
+// listing a Race's Registrations, and deleting one.
 
-import type { RegistrationInput } from "./registration-input";
+import type { Duration } from "../domain/categories";
+import type { ParticipantInput, RegistrationInput } from "./registration-input";
+
+/** A Registration as stored: its Participants in entered order. */
+export type StoredRegistration = {
+  number: number;
+  duration: Duration;
+  /** ISO timestamp (UTC) of the submit. */
+  createdAt: string;
+  participants: ParticipantInput[];
+};
 
 export type SubmitResult = { number: number } | { closed: true };
 
@@ -25,6 +36,69 @@ export async function submitRegistration(db: D1Database, raceId: number, input: 
       throw error;
     }
   }
+}
+
+type RegistrationRow = {
+  number: number;
+  duration: Duration;
+  created_at: string;
+  gender: ParticipantInput["gender"];
+  title: ParticipantInput["title"];
+  first_name: string;
+  last_name: string;
+  birth_year: number;
+  club: string | null;
+};
+
+const REGISTRATIONS_WITH_PARTICIPANTS = `
+  SELECT r.number, r.duration, r.created_at, p.gender, p.title, p.first_name, p.last_name, p.birth_year, p.club
+  FROM registrations r JOIN participants p ON p.registration_id = r.id`;
+
+/** One Registration per number, Participants in slot order (rows must come sorted by Registration, then slot). */
+function groupRows(rows: RegistrationRow[]): StoredRegistration[] {
+  const registrations: StoredRegistration[] = [];
+  for (const row of rows) {
+    let current = registrations[registrations.length - 1];
+    if (!current || current.number !== row.number) {
+      current = { number: row.number, duration: row.duration, createdAt: row.created_at, participants: [] };
+      registrations.push(current);
+    }
+    current.participants.push({
+      gender: row.gender,
+      title: row.title,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      birthYear: row.birth_year,
+      club: row.club,
+    });
+  }
+  return registrations;
+}
+
+/** All Registrations of a Race, newest first. */
+export async function listRegistrations(db: D1Database, raceId: number): Promise<StoredRegistration[]> {
+  const { results } = await db
+    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? ORDER BY r.created_at DESC, r.id DESC, p.slot`)
+    .bind(raceId)
+    .all<RegistrationRow>();
+  return groupRows(results);
+}
+
+export async function findRegistration(db: D1Database, raceId: number, number: number): Promise<StoredRegistration | null> {
+  const { results } = await db
+    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? AND r.number = ? ORDER BY p.slot`)
+    .bind(raceId, number)
+    .all<RegistrationRow>();
+  return groupRows(results)[0] ?? null;
+}
+
+/**
+ * Deletes a Registration; its Participants go with it (ON DELETE CASCADE).
+ * Its number is not given out again. False when the Race has no such Registration.
+ */
+export async function deleteRegistration(db: D1Database, raceId: number, number: number): Promise<boolean> {
+  const result = await db.prepare("DELETE FROM registrations WHERE race_id = ? AND number = ?").bind(raceId, number).run();
+  return result.meta.changes > 0;
 }
 
 async function findNumberByAttempt(db: D1Database, raceId: number, attemptId: string): Promise<number | null> {

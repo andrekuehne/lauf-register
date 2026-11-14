@@ -67,6 +67,11 @@ The number shown on a Registration's confirmation screen and read out at the rac
 _Avoid_: Bib (the physical number a Participant wears)
 _German (UI)_: Startnummer
 
+**Possible duplicate**:
+A Participant whose first name, last name and birth year match another Participant of the same Race (ignoring case and spacing), on another Registration or as the other half of the same Pair. Flagged for the Admin, never blocked: someone may genuinely run twice, e.g. once single and once in a Pair.
+_Avoid_: Double, conflict
+_German (UI)_: Mögliches Duplikat
+
 **Race desk**:
 The on-site table where Registrations are checked, bibs are handed out, and people without a phone are registered on a shared device.
 _Avoid_: Check-in, counter

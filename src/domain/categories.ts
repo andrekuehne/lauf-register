@@ -51,6 +51,13 @@ export function slotGenders(division: Division, mixedFirstGender?: Gender): (Gen
   }
 }
 
+/** The Division of a stored Registration: it follows from its Participants' Genders. */
+export function divisionOf(genders: readonly Gender[]): Division {
+  if (genders.length === 1) return genders[0] === "F" ? "women" : "men";
+  if (genders[0] !== genders[1]) return "mixed_pair";
+  return genders[0] === "F" ? "womens_pair" : "mens_pair";
+}
+
 function isOneOf<T>(list: readonly T[], value: unknown): value is T {
   return (list as readonly unknown[]).indexOf(value) >= 0;
 }

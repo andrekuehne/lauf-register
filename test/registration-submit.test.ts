@@ -1,38 +1,13 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { asAdmin, newRace, request, setRegistration } from "./http";
+import { anna, ben, clara, emil, registration } from "./fixtures";
+import { asAdmin, newRace, request, setRegistration, submit } from "./http";
 
 // Storage is shared by the tests in a file: start each test without Races
 // (deleting a Race also deletes its Registrations).
 beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
 });
-
-let attempts = 0;
-const freshAttemptId = () => `attempt-${++attempts}-${crypto.randomUUID()}`;
-
-const anna = { gender: "F", title: "dr", firstName: "Anna", lastName: "Muster", birthYear: 1985, club: "LG Nord" };
-const clara = { gender: "F", title: "none", firstName: "Clara", lastName: "Muster", birthYear: 2015, club: "LG Nord" };
-const ben = { gender: "M", title: "none", firstName: "Ben", lastName: "Beispiel", birthYear: 1990, club: null };
-const emil = { gender: "M", title: "none", firstName: "Emil", lastName: "Beispiel", birthYear: 2017, club: null };
-
-function registration(overrides: Record<string, unknown> = {}) {
-  return {
-    attemptId: freshAttemptId(),
-    duration: 60,
-    consent: true,
-    participants: [anna],
-    ...overrides,
-  };
-}
-
-function submit(raceLink: string, body: unknown) {
-  return request(`${raceLink}/registrations`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
 
 async function numberOf(res: Response): Promise<number> {
   expect(res.status).toBe(200);

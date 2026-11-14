@@ -34,14 +34,32 @@ export function postRace(fields: Record<string, string>, headers: Record<string,
   return postForm("/admin/races", fields, headers);
 }
 
+/** The admin page of the Race behind a public link (its Registrations). */
+export const adminRacePath = (raceLink: string) => `/admin/races/${raceLink.slice("/r/".length)}`;
+
+/** The admin page of a Registration's delete confirmation; posting to it deletes. */
+export const deletePath = (raceLink: string, number: number) => `${adminRacePath(raceLink)}/registrations/${number}/delete`;
+
+export function postDelete(raceLink: string, number: number, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  return postForm(deletePath(raceLink, number), {}, headers);
+}
+
 /** The public /r/… links on the admin Race list, newest race day first. */
 export async function publicLinks(): Promise<string[]> {
   const html = await (await asAdmin("/admin")).text();
   return [...html.matchAll(/href="(\/r\/[^"]+)"/g)].map((m) => m[1]!);
 }
 
-/**
- * Opens or closes Registration for the Race behind a public link, through the
+/** Submits a Registration through the public link, as the browser flow does. */
+export function submit(raceLink: string, body: unknown) {
+  return request(`${raceLink}/registrations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Opens or closes Registration for the Race behind a public link, through the
  * admin area. A string is sent as the raw form value.
  */
 export function setRegistration(raceLink: string, open: boolean | string, headers: Record<string, string> = { "x-test-admin": ADMIN }) {

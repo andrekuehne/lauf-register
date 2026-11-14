@@ -19,6 +19,29 @@ export function formatRaceDateLong(isoDate: string, lang: Lang): string {
   }).format(atUtcMidnight(isoDate));
 }
 
+/** The organizers' time zone: registration times are shown in it. */
+const RACE_TIME_ZONE = "Europe/Berlin";
+
+/**
+ * When a Registration came in: "14:32" on the race day, "08.12. 21:05" on any
+ * other day (registration can open before the day).
+ */
+export function formatRegistrationTime(createdAt: string, raceDate: string): string {
+  const parts = new Intl.DateTimeFormat("de-DE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: RACE_TIME_ZONE,
+  }).formatToParts(new Date(createdAt));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  const time = `${part("hour")}:${part("minute")}`;
+  const sameDay = `${part("year")}-${part("month")}-${part("day")}` === raceDate;
+  return sameDay ? time : `${part("day")}.${part("month")}. ${time}`;
+}
+
 /** "Mi., 09.12.2026" */
 export function formatRaceDateShort(isoDate: string, lang: Lang): string {
   return new Intl.DateTimeFormat(locale(lang), {

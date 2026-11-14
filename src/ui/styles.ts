@@ -106,5 +106,19 @@ border:2px solid var(--line);border-radius:24px;background:#fff;font-weight:600;
 .reg-closed{color:var(--muted)}
 .btn-small{min-height:44px;padding:8px 14px;font:inherit;font-size:.95rem;font-weight:700;color:var(--accent);background:var(--card);
 border:2px solid var(--accent);border-radius:10px;cursor:pointer}
+.race-regs{margin:2px 0 6px;color:var(--accent);font-weight:700}
+.reg-list{list-style:none;margin:0;padding:0}
+.reg{border-left:6px solid var(--c)}
+.reg-head{display:flex;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.reg-no{min-width:3.2rem;margin-right:10px;font-size:1.5rem;line-height:1.2}
+.reg-cat{display:flex;align-items:center;flex:1;min-width:0;margin-right:10px;color:var(--c);font-weight:700}
+.reg-cat .ico{width:30px;height:30px;margin-right:8px}
+.reg-cat .ico svg{width:20px;height:20px}
+.reg-time{font-size:.9rem}
+.reg-person{margin:4px 0 0}
+.dup{margin:4px 0 0;padding:4px 8px;background:var(--warn-bg);border-left:4px solid var(--warn-line);color:var(--warn-fg);font-size:.9rem;font-weight:600;border-radius:4px}
+.reg-delete{display:inline-block;margin-top:8px;padding:6px 0;color:var(--danger);font-size:.95rem}
+.btn-danger{background:var(--danger)}
+.cancel{margin-top:14px;text-align:center}
 .note{padding:12px;background:var(--warn-bg);border-radius:8px}
 `;

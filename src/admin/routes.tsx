@@ -1,23 +1,13 @@
 import { Hono, type Context } from "hono";
 import { csrf } from "hono/csrf";
-import type { Child } from "hono/jsx";
 import type { AppEnv } from "../language";
-import { Layout } from "../layout";
 import { formatRaceDateShort } from "../races/race-dates";
 import { MAX_RACE_NAME_LENGTH, validateRaceInput, type RaceInput, type RaceInputErrors } from "../races/race-input";
-import { createRace, listRaces, setRegistrationOpen, type RaceListItem } from "../races/races";
+import { createRace, findRaceByToken, listRaces, setRegistrationOpen, type Race, type RaceListItem } from "../races/races";
+import { deleteRegistration, findRegistration, listRegistrations } from "../registration/registrations";
+import { AdminPage, problemPage, registrationCount } from "./admin-page";
 import type { AdminIdentity } from "./identity";
-
-// The admin area is German only.
-
-function AdminPage(props: { url: string; title?: string; admin?: string; children: Child }) {
-  return (
-    <Layout lang="de" url={props.url} title={props.title ?? "Admin"} heading="Lauf-Register · Admin" languageSwitch={false}>
-      {props.admin && <p class="muted admin-who">Angemeldet als {props.admin}</p>}
-      {props.children}
-    </Layout>
-  );
-}
+import { deleteRegistrationPage, racePath, raceRegistrationsPage } from "./registrations-page";
 
 function NewRaceForm(props: { values?: Partial<RaceInput>; errors?: RaceInputErrors }) {
   const { values = {}, errors = {} } = props;
@@ -62,25 +52,16 @@ function RaceList(props: { races: RaceListItem[]; origin: string }) {
           <li class="card">
             <b class="race-name">{race.name}</b>
             <span class="muted">
-              {formatRaceDateShort(race.date, "de")} · {race.registrationCount} {race.registrationCount === 1 ? "Anmeldung" : "Anmeldungen"}
+              {formatRaceDateShort(race.date, "de")} · {registrationCount(race.registrationCount)}
             </span>
             <a href={link} class="race-link">{`${props.origin}${link}`}</a>
+            <a href={racePath(race)} class="race-regs">Anmeldungen ansehen →</a>
             <RegistrationSwitch race={race} />
             <small class="muted">angelegt von {race.createdBy}</small>
           </li>
         );
       })}
     </ul>
-  );
-}
-
-function problemPage(c: Context<AppEnv>, text: string, status: 400 | 404) {
-  return c.html(
-    <AdminPage url={c.req.url} admin={c.get("adminEmail")}>
-      <p class="alert">{text}</p>
-      <p><a href="/admin">Zurück zur Übersicht</a></p>
-    </AdminPage>,
-    status,
   );
 }
 
@@ -94,6 +75,18 @@ async function racesPage(c: Context<AppEnv>, form?: { values: RaceInput; errors:
     </AdminPage>,
     form ? 400 : 200,
   );
+}
+
+const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
+const REGISTRATION_NOT_FOUND = "Diese Anmeldung gibt es nicht (mehr).";
+
+/** A Registration number from the URL, or null when it isn't one. */
+const registrationNumber = (param: string) => (/^\d{1,9}$/.test(param) ? Number(param) : null);
+
+/** Runs `then` with the Race named by the URL's token, or answers 404. */
+async function withRace(c: Context<AppEnv>, then: (race: Race) => Promise<Response>): Promise<Response> {
+  const race = await findRaceByToken(c.env.DB, c.req.param("token") ?? "");
+  return race ? then(race) : problemPage(c, RACE_NOT_FOUND, 404);
 }
 
 export function adminRoutes(identity: AdminIdentity) {
@@ -131,9 +124,31 @@ export function adminRoutes(identity: AdminIdentity) {
     const { open } = await c.req.parseBody();
     if (open !== "1" && open !== "0") return problemPage(c, "Ungültige Anfrage.", 400);
     const found = await setRegistrationOpen(c.env.DB, c.req.param("token"), open === "1");
-    if (!found) return problemPage(c, "Diesen Lauf gibt es nicht (mehr).", 404);
+    if (!found) return problemPage(c, RACE_NOT_FOUND, 404);
     return c.redirect("/admin", 303);
   });
+
+  admin.get("/races/:token", (c) =>
+    withRace(c, async (race) => raceRegistrationsPage(c, race, await listRegistrations(c.env.DB, race.id))),
+  );
+
+  admin.get("/races/:token/registrations/:number/delete", (c) =>
+    withRace(c, async (race) => {
+      const number = registrationNumber(c.req.param("number"));
+      const registration = number === null ? null : await findRegistration(c.env.DB, race.id, number);
+      if (!registration) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
+      return deleteRegistrationPage(c, race, registration);
+    }),
+  );
+
+  admin.post("/races/:token/registrations/:number/delete", (c) =>
+    withRace(c, async (race) => {
+      const number = registrationNumber(c.req.param("number"));
+      const deleted = number !== null && (await deleteRegistration(c.env.DB, race.id, number));
+      if (!deleted) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
+      return c.redirect(racePath(race), 303);
+    }),
+  );
 
   return admin;
 }
