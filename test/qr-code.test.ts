@@ -18,7 +18,7 @@ describe("the A4 poster", () => {
     const html = await res.text();
     expect(html).toContain("Nikolauslauf");
     expect(html).toContain("9. Dezember 2026");
-    expect(html).toContain("Hier abmelden"); // deliberately failing: CI check
+    expect(html).toContain("Hier anmelden");
     expect(html).toContain(`${ORIGIN}${race}`);
     expect(qrTexts(html)).toEqual([`${ORIGIN}${race}`]);
   });
