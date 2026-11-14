@@ -1,8 +1,8 @@
 // Registrations in D1: storing a submitted Registration with its Participants,
-// listing a Race's Registrations, and deleting one.
+// listing a Race's Registrations, and editing or deleting one.
 
 import type { Duration } from "../domain/categories";
-import type { ParticipantInput, RegistrationInput } from "./registration-input";
+import type { ParticipantInput, RegistrationContent, RegistrationInput } from "./registration-input";
 
 /** A Registration as stored: its Participants in entered order. */
 export type StoredRegistration = {
@@ -97,6 +97,33 @@ export async function findRegistration(db: D1Database, raceId: number, number: n
 }
 
 /**
+ * Replaces a Registration's Duration and Participants in one transaction (a
+ * Pair may become a single or the other way round). The Registration number
+ * stays. False when the Race has no such Registration.
+ */
+export async function updateRegistration(db: D1Database, raceId: number, number: number, content: RegistrationContent): Promise<boolean> {
+  const where = "race_id = ? AND number = ?";
+  const [updated] = await db.batch([
+    db.prepare(`UPDATE registrations SET duration = ? WHERE ${where}`).bind(content.duration, raceId, number),
+    db.prepare(`DELETE FROM participants WHERE registration_id = (SELECT id FROM registrations WHERE ${where})`).bind(raceId, number),
+    ...insertParticipants(db, content.participants, where, [raceId, number]),
+  ]);
+  return updated!.meta.changes > 0;
+}
+
+/** Statements storing Participants, in slot order, on the Registration that `where` (with `binds`) selects. */
+function insertParticipants(db: D1Database, participants: ParticipantInput[], where: string, binds: unknown[]): D1PreparedStatement[] {
+  return participants.map((p, index) =>
+    db
+      .prepare(
+        `INSERT INTO participants (registration_id, slot, gender, title, first_name, last_name, birth_year, club)
+         SELECT id, ?, ?, ?, ?, ?, ?, ? FROM registrations WHERE ${where}`,
+      )
+      .bind(index + 1, p.gender, p.title, p.firstName, p.lastName, p.birthYear, p.club, ...binds),
+  );
+}
+
+/**
  * Deletes a Registration; its Participants go with it (ON DELETE CASCADE).
  * Its number is not given out again. False when the Race has no such Registration.
  */
@@ -136,14 +163,7 @@ async function insertRegistration(db: D1Database, raceId: number, input: Registr
        RETURNING number`,
     )
     .bind(input.duration, input.attemptId, raceId);
-  const participants = input.participants.map((p, index) =>
-    db
-      .prepare(
-        `INSERT INTO participants (registration_id, slot, gender, title, first_name, last_name, birth_year, club)
-         SELECT id, ?, ?, ?, ?, ?, ?, ? FROM registrations WHERE race_id = ? AND attempt_id = ?`,
-      )
-      .bind(index + 1, p.gender, p.title, p.firstName, p.lastName, p.birthYear, p.club, raceId, input.attemptId),
-  );
+  const participants = insertParticipants(db, input.participants, "race_id = ? AND attempt_id = ?", [raceId, input.attemptId]);
   const [, inserted] = await db.batch<{ number: number }>([nextNumber, registration, ...participants]);
   return inserted!.results[0]?.number ?? null;
 }

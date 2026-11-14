@@ -14,12 +14,14 @@ export type ParticipantInput = {
   club: string | null;
 };
 
-export type RegistrationInput = {
-  attemptId: string;
+/** What a Registration says: its Duration and Participants. An Admin edit changes exactly this. */
+export type RegistrationContent = {
   duration: Duration;
   /** In entered order: one Participant, or two for a Pair (any two Genders, in either order). */
   participants: ParticipantInput[];
 };
+
+export type RegistrationInput = RegistrationContent & { attemptId: string };
 
 /** Where in the submitted JSON the problem is (e.g. "participants.1.lastName") and what's wrong. */
 export type RegistrationIssue = { path: string; message: string };
@@ -27,6 +29,8 @@ export type RegistrationIssue = { path: string; message: string };
 export type RegistrationValidation =
   | { ok: true; input: RegistrationInput }
   | { ok: false; issues: RegistrationIssue[] };
+
+export type ContentValidation = { ok: true; content: RegistrationContent } | { ok: false; issues: RegistrationIssue[] };
 
 /** The browser sends 32 hex characters; anything similar is fine, markup and the like is not. */
 const ATTEMPT_ID = /^[A-Za-z0-9_-]{16,64}$/;
@@ -45,28 +49,48 @@ export function validateRegistrationInput(body: unknown, raceYear: number): Regi
   const issues: RegistrationIssue[] = [];
   const issue = (path: string, message: string) => issues.push({ path, message });
 
-  const { attemptId, duration, consent, participants } = body;
+  const { attemptId, consent } = body;
   if (typeof attemptId !== "string" || !ATTEMPT_ID.test(attemptId)) issue("attemptId", "attempt ID is missing or malformed");
-  if (!isDuration(duration)) issue("duration", "unknown Duration");
   if (consent !== true) issue("consent", "consent must be ticked");
+  const content = checkContent(body, raceYear, issue);
+
+  if (issues.length > 0 || !content) return { ok: false, issues };
+  return { ok: true, input: { attemptId: attemptId as string, ...content } };
+}
+
+/** An Admin's edit: the same rules as a submit, for the Duration and Participants. */
+export function validateRegistrationEdit(body: unknown, raceYear: number): ContentValidation {
+  if (!isObject(body)) return { ok: false, issues: [{ path: "", message: "expected an object" }] };
+  const issues: RegistrationIssue[] = [];
+  const content = checkContent(body, raceYear, (path, message) => issues.push({ path, message }));
+  return content && issues.length === 0 ? { ok: true, content } : { ok: false, issues };
+}
+
+/** Duration and Participants; null when anything is wrong (each problem reported through `issue`). */
+function checkContent(body: Fields, raceYear: number, issue: (path: string, message: string) => void): RegistrationContent | null {
+  const { duration, participants } = body;
+  let ok = true;
+  const fail = (path: string, message: string) => {
+    issue(path, message);
+    ok = false;
+  };
+  if (!isDuration(duration)) fail("duration", "unknown Duration");
 
   const checked: ParticipantInput[] = [];
   if (!Array.isArray(participants)) {
-    issue("participants", "Participants are missing");
+    fail("participants", "Participants are missing");
   } else {
     if (participants.length < 1 || participants.length > 2) {
-      issue("participants", `expected one Participant or a Pair of two, got ${participants.length}`);
+      fail("participants", `expected one Participant or a Pair of two, got ${participants.length}`);
     }
     participants.forEach((p: unknown, index) => {
       const participant = validateParticipant(p, raceYear, (field, message) =>
-        issue(field ? `participants.${index}.${field}` : `participants.${index}`, message),
+        fail(field ? `participants.${index}.${field}` : `participants.${index}`, message),
       );
       if (participant) checked.push(participant);
     });
   }
-
-  if (issues.length > 0) return { ok: false, issues };
-  return { ok: true, input: { attemptId: attemptId as string, duration: duration as Duration, participants: checked } };
+  return ok ? { duration: duration as Duration, participants: checked } : null;
 }
 
 function validateParticipant(

@@ -18,6 +18,7 @@ const t = strings("de").flow;
 export const racePath = (race: Race) => `/admin/races/${race.token}`;
 export const deleteRacePath = (race: Race) => `${racePath(race)}/delete`;
 const exportPath = (race: Race) => `${racePath(race)}/export.xlsx`;
+export const editPath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/edit`;
 const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
 /** The Race page lists the hour first; Divisions in their usual order (women first, singles before Pairs). */
@@ -61,9 +62,12 @@ function RegistrationCard(props: {
         );
       })}
       {props.deletable && (
-        <a href={deletePath(race, registration)} class="reg-delete">
-          Löschen
-        </a>
+        <p class="reg-actions">
+          <a href={editPath(race, registration)}>Bearbeiten</a>
+          <a href={deletePath(race, registration)} class="reg-delete">
+            Löschen
+          </a>
+        </p>
       )}
     </li>
   );

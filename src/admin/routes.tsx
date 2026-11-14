@@ -3,12 +3,20 @@ import { csrf } from "hono/csrf";
 import { raceResultFileName, raceResultRows, RACERESULT_SHEET } from "../export/raceresult";
 import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
 import type { AppEnv } from "../language";
-import { formatRaceDateShort } from "../races/race-dates";
+import { formatRaceDateShort, raceYear } from "../races/race-dates";
 import { MAX_RACE_NAME_LENGTH, validateRaceInput, type RaceInput, type RaceInputErrors } from "../races/race-input";
 import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, type Race, type RaceListItem } from "../races/races";
-import { countRegistrations, deleteRegistration, findRegistration, listRegistrations } from "../registration/registrations";
+import {
+  countRegistrations,
+  deleteRegistration,
+  findRegistration,
+  listRegistrations,
+  updateRegistration,
+  type StoredRegistration,
+} from "../registration/registrations";
 import { normalizedText } from "../shared/same-text";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
+import { checkEdit, editRegistrationPage, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage } from "./registrations-page";
 
@@ -91,6 +99,15 @@ function sameName(typed: unknown, name: string): boolean {
 /** A Registration number from the URL, or null when it isn't one. */
 const registrationNumber = (param: string) => (/^\d{1,9}$/.test(param) ? Number(param) : null);
 
+/** Runs `then` with the Race and the Registration named by the URL, or answers 404. */
+function withRegistration(c: Context<AppEnv>, then: (race: Race, registration: StoredRegistration) => Promise<Response>): Promise<Response> {
+  return withRace(c, async (race) => {
+    const number = registrationNumber(c.req.param("number") ?? "");
+    const registration = number === null ? null : await findRegistration(c.env.DB, race.id, number);
+    return registration ? then(race, registration) : problemPage(c, REGISTRATION_NOT_FOUND, 404);
+  });
+}
+
 /** Runs `then` with the Race named by the URL's token, or answers 404. */
 async function withRace(c: Context<AppEnv>, then: (race: Race) => Promise<Response>): Promise<Response> {
   const race = await findRaceByToken(c.env.DB, c.req.param("token") ?? "");
@@ -168,13 +185,24 @@ export function adminRoutes(identity: AdminIdentity) {
     }),
   );
 
-  admin.get("/races/:token/registrations/:number/delete", (c) =>
-    withRace(c, async (race) => {
-      const number = registrationNumber(c.req.param("number"));
-      const registration = number === null ? null : await findRegistration(c.env.DB, race.id, number);
-      if (!registration) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
-      return deleteRegistrationPage(c, race, registration);
+  admin.get("/races/:token/registrations/:number/edit", (c) =>
+    withRegistration(c, async (race, registration) => editRegistrationPage(c, race, registration, storedValues(registration))),
+  );
+
+  admin.post("/races/:token/registrations/:number/edit", (c) =>
+    withRegistration(c, async (race, registration) => {
+      const values = postedValues(await c.req.parseBody());
+      const checked = checkEdit(values, raceYear(race));
+      if (!checked.ok) return editRegistrationPage(c, race, registration, values, checked.errors);
+      // Deleted by another Admin in the meantime: say so rather than pretend it was saved.
+      const saved = await updateRegistration(c.env.DB, race.id, registration.number, checked.content);
+      if (!saved) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
+      return c.redirect(racePath(race), 303);
     }),
+  );
+
+  admin.get("/races/:token/registrations/:number/delete", (c) =>
+    withRegistration(c, async (race, registration) => deleteRegistrationPage(c, race, registration)),
   );
 
   admin.post("/races/:token/registrations/:number/delete", (c) =>

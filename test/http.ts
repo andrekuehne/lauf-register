@@ -44,6 +44,13 @@ export function postDelete(raceLink: string, number: number, headers: Record<str
   return postForm(deletePath(raceLink, number), {}, headers);
 }
 
+/** The admin form for editing a Registration; posting to it saves. */
+export const editPath = (raceLink: string, number: number) => `${adminRacePath(raceLink)}/registrations/${number}/edit`;
+
+export function postEdit(raceLink: string, number: number, fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  return postForm(editPath(raceLink, number), fields, headers);
+}
+
 /** The admin page that asks before a whole Race is deleted; posting to it deletes. */
 export const deleteRacePath = (raceLink: string) => `${adminRacePath(raceLink)}/delete`;
 

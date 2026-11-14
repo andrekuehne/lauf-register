@@ -120,7 +120,11 @@ border:2px solid var(--accent);border-radius:10px;cursor:pointer}
 .reg-time{font-size:.9rem}
 .reg-person{margin:4px 0 0}
 .dup{margin:4px 0 0;padding:4px 8px;background:var(--warn-bg);border-left:4px solid var(--warn-line);color:var(--warn-fg);font-size:.9rem;font-weight:600;border-radius:4px}
-.reg-delete{display:inline-block;margin-top:8px;padding:6px 0;color:var(--danger);font-size:.95rem}
+.reg-actions{margin:8px 0 0;font-size:.95rem}
+.reg-actions a{display:inline-block;padding:6px 0;margin-right:20px;color:var(--accent)}
+.reg-actions a.reg-delete{color:var(--danger)}
+.edit-participant{border:0;margin-top:12px}
+.edit-participant legend{float:left;width:100%;padding:0;font-weight:700;font-size:1.1rem}
 .btn-danger{background:var(--danger)}
 .cancel{margin-top:14px;text-align:center}
 .race-delete{margin-top:36px;text-align:center}
