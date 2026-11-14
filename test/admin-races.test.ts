@@ -1,44 +1,11 @@
-import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createApp } from "../src/app";
-import type { AdminIdentity } from "../src/admin/identity";
-
-// The one allowed test double: the admin identity. A request is "signed in"
-// as whatever email the x-test-admin header names; without it, it's anonymous.
-const testIdentity: AdminIdentity = async (c) => c.req.header("x-test-admin") ?? null;
-const app = createApp({ identity: testIdentity });
+import { ADMIN, asAdmin, postRace, publicLinks, request } from "./http";
 
 // Storage is shared by the tests in a file: start each test without Races.
 beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
 });
-
-const ORIGIN = "https://example.com";
-const ADMIN = "orga@example.com";
-
-async function request(path: string, init: RequestInit = {}) {
-  const ctx = createExecutionContext();
-  const res = await app.fetch(new Request(`${ORIGIN}${path}`, { redirect: "manual", ...init }), env, ctx);
-  await waitOnExecutionContext(ctx);
-  return res;
-}
-
-const asAdmin = (path: string, init: RequestInit = {}) =>
-  request(path, { ...init, headers: { "x-test-admin": ADMIN, ...(init.headers ?? {}) } });
-
-function postRace(fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
-  return request("/admin/races", {
-    method: "POST",
-    body: new URLSearchParams(fields),
-    headers: { origin: ORIGIN, "content-type": "application/x-www-form-urlencoded", ...headers },
-  });
-}
-
-async function publicLinks(): Promise<string[]> {
-  const html = await (await asAdmin("/admin")).text();
-  return [...html.matchAll(/href="(\/r\/[^"]+)"/g)].map((m) => m[1]!);
-}
 
 describe("admin area", () => {
   it("rejects requests without a signed-in Admin", async () => {

@@ -4,9 +4,11 @@ import { adminRoutes } from "./admin/routes";
 import { strings } from "./i18n";
 import { language, type AppEnv } from "./language";
 import { Layout } from "./layout";
-import { fakeBackend } from "./prototype/fake-backend";
+import { raceYear } from "./races/race-dates";
 import { findRaceByToken } from "./races/races";
 import { raceNotFoundPage, registrationPage } from "./registration/page";
+import { validateRegistrationInput } from "./registration/registration-input";
+import { submitRegistration } from "./registration/registrations";
 
 /** The whole Worker app. The admin identity is passed in so tests can substitute it (the only test double). */
 export function createApp(deps: { identity: AdminIdentity }) {
@@ -26,13 +28,20 @@ export function createApp(deps: { identity: AdminIdentity }) {
 
   app.route("/admin", adminRoutes(deps.identity));
 
-  // TEMPORARY (#3): demo Races and fake submit. Removed together with src/prototype/ in #5.
-  // Only answers for its demo tokens; every other token falls through to the real route below.
-  app.route("/", fakeBackend);
-
   app.get("/r/:token", async (c) => {
     const race = await findRaceByToken(c.env.DB, c.req.param("token"));
     return race ? registrationPage(c, race) : raceNotFoundPage(c);
+  });
+
+  // Called by the browser flow (src/client/flow.ts), JSON in and out.
+  app.post("/r/:token/registrations", async (c) => {
+    const race = await findRaceByToken(c.env.DB, c.req.param("token"));
+    if (!race) return c.json({ error: "race not found" }, 404);
+    const body = await c.req.json().catch(() => undefined);
+    const result = validateRegistrationInput(body, raceYear(race));
+    if (!result.ok) return c.json({ error: "invalid registration", issues: result.issues }, 400);
+    const number = await submitRegistration(c.env.DB, race.id, result.input);
+    return c.json({ number });
   });
 
   app.notFound((c) => {

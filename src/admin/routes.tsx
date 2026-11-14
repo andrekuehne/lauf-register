@@ -49,7 +49,7 @@ function RaceList(props: { races: RaceListItem[]; origin: string }) {
           <li class="card">
             <b class="race-name">{race.name}</b>
             <span class="muted">
-              {formatRaceDateShort(race.date, "de")} · {race.registrationCount} Anmeldungen
+              {formatRaceDateShort(race.date, "de")} · {race.registrationCount} {race.registrationCount === 1 ? "Anmeldung" : "Anmeldungen"}
             </span>
             <a href={link} class="race-link">{`${props.origin}${link}`}</a>
             <small class="muted">angelegt von {race.createdBy}</small>

@@ -1,9 +1,10 @@
 import type { Context } from "hono";
 import { raw } from "hono/html";
 import { DIVISIONS, DURATIONS, TITLES } from "../domain/categories";
+import { MAX_TEXT_LENGTH } from "../domain/participant-checks";
 import { flowBundle } from "../generated/flow-bundle";
 import { strings, type FlowStrings } from "../i18n";
-import { formatRaceDateLong } from "../races/race-dates";
+import { formatRaceDateLong, raceYear } from "../races/race-dates";
 import type { AppEnv } from "../language";
 import { LanguageSwitch, Layout } from "../layout";
 import { divisionIconSvg, ICONS } from "../ui/icon-svgs";
@@ -45,12 +46,12 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
       <div class="row">
       <div class="field">
         <label class="label" for={id("firstName")}>{t.firstName}</label>
-        <input type="text" id={id("firstName")} data-field="firstName" autocomplete={auto("given-name")} autocapitalize="words" />
+        <input type="text" id={id("firstName")} data-field="firstName" maxlength={MAX_TEXT_LENGTH} autocomplete={auto("given-name")} autocapitalize="words" />
         <p class="error" data-error="firstName" hidden></p>
       </div>
       <div class="field">
         <label class="label" for={id("lastName")}>{t.lastName}</label>
-        <input type="text" id={id("lastName")} data-field="lastName" autocomplete={auto("family-name")} autocapitalize="words" />
+        <input type="text" id={id("lastName")} data-field="lastName" maxlength={MAX_TEXT_LENGTH} autocomplete={auto("family-name")} autocapitalize="words" />
         <p class="error" data-error="lastName" hidden></p>
       </div>
       </div>
@@ -64,7 +65,7 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
         <label class="label" for={id("club")}>
           {t.club} <small>({t.optional})</small>
         </label>
-        <input type="text" id={id("club")} data-field="club" autocomplete="off" autocapitalize="words" />
+        <input type="text" id={id("club")} data-field="club" maxlength={MAX_TEXT_LENGTH} autocomplete="off" autocapitalize="words" />
       </div>
     </div>
   );
@@ -77,7 +78,7 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
   const config: FlowConfig = {
     submitUrl: `/r/${race.token}/registrations`,
     storageKey: `lauf-register:${race.token}`,
-    raceYear: Number(race.date.slice(0, 4)),
+    raceYear: raceYear(race),
     t,
   };
   const heading = (

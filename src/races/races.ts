@@ -59,9 +59,13 @@ export async function createRace(db: D1Database, input: RaceInput & { createdBy:
 
 /** All Races, newest race day first. Every Admin sees every Race. */
 export async function listRaces(db: D1Database): Promise<RaceListItem[]> {
-  const { results } = await db.prepare("SELECT * FROM races ORDER BY date DESC, id DESC").all<RaceRow>();
-  // Registrations arrive with #5; until then every Race has none.
-  return results.map((row) => ({ ...fromRow(row), registrationCount: 0 }));
+  const { results } = await db
+    .prepare(
+      `SELECT races.*, (SELECT COUNT(*) FROM registrations WHERE race_id = races.id) AS registration_count
+       FROM races ORDER BY date DESC, id DESC`,
+    )
+    .all<RaceRow & { registration_count: number }>();
+  return results.map((row) => ({ ...fromRow(row), registrationCount: row.registration_count }));
 }
 
 export async function findRaceByToken(db: D1Database, token: string): Promise<Race | null> {

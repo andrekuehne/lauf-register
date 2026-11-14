@@ -41,7 +41,6 @@ npx wrangler login
 | `npm run db:migrate:local` | Applies new migrations to the local D1 database. |
 | `npm run db:migrate:remote` | Applies new migrations to the production D1 database. |
 | `npm run deploy` | Deploys the Worker. Apply remote migrations first if there are new ones. |
-| `npm run preview:upload` | Uploads the current code as a preview version (`prototype-…workers.dev`) without touching production. |
 | `npm run cf-typegen` | Regenerates `worker-configuration.d.ts` after changing `wrangler.jsonc`. |
 
 ## Admin sign-in (Cloudflare Access)

@@ -1,5 +1,5 @@
 // Rules for a Participant's details. Shared by the browser (inline feedback)
-// and, from #5 on, the Worker (authoritative validation).
+// and the Worker (authoritative validation, src/registration/registration-input.ts).
 
 import type { Gender, Title } from "./categories";
 
@@ -7,6 +7,9 @@ export const OLDEST_PLAUSIBLE_BIRTH_YEAR = 1920;
 export const YOUNGEST_PLAUSIBLE_AGE = 3;
 /** Participants younger than this are expected to have the Title "kids". */
 export const KIDS_AGE_LIMIT = 12;
+
+/** Longest accepted name or club; the form fields stop typing there. */
+export const MAX_TEXT_LENGTH = 100;
 
 /** Below this a four-digit "year" is a typo, not a birth year. */
 export const OLDEST_VALID_BIRTH_YEAR = 1800;

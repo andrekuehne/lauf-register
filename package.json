@@ -12,8 +12,7 @@
     "cf-typegen": "wrangler types --strict-vars=false",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "deploy": "wrangler deploy",
-    "preview:upload": "wrangler versions upload --preview-alias prototype"
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "hono": "^4.13.18"
