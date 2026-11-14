@@ -35,7 +35,7 @@ One person named on a Registration, with a Title, first name, last name, birth y
 _Avoid_: Runner, athlete, user
 
 **Title**:
-How a Participant is addressed: one of *–* (none), *Dr.*, *Frau*, *Herr*, *Kids*. *Kids* marks a child; what it means for the export is still open.
+How a Participant is addressed: one of *–* (none), *Dr.*, *Frau*, *Herr*, *Kids*. *Kids* marks a child under 12; what it means for the export is still open.
 _Avoid_: Salutation, prefix
 
 **Pair**:

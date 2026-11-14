@@ -14,6 +14,7 @@ export default defineConfig({
     })),
   ],
   test: {
+    globalSetup: ["./test/global-setup.ts"],
     setupFiles: ["./test/apply-migrations.ts"],
   },
 });

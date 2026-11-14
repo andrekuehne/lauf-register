@@ -38,7 +38,12 @@ npx wrangler login
 | `npm run db:migrate:local` | Applies new migrations to the local D1 database. |
 | `npm run db:migrate:remote` | Applies new migrations to the production D1 database. |
 | `npm run deploy` | Deploys the Worker. Apply remote migrations first if there are new ones. |
+| `npm run preview:upload` | Uploads the current code as a preview version (`prototype-…workers.dev`) without touching production. |
 | `npm run cf-typegen` | Regenerates `worker-configuration.d.ts` after changing `wrangler.jsonc`. |
+
+### Browser code
+
+The registration flow runs in the browser from `src/client/flow.ts`. `scripts/build-client.mjs` bundles it for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
 
 ### Database migrations
 

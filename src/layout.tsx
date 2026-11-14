@@ -1,32 +1,51 @@
 import { raw } from "hono/html";
 import type { Child } from "hono/jsx";
+import { LANG_NAMES, LANGS, strings, type Lang } from "./i18n";
+import { languageSwitchHref } from "./language";
+import { styles } from "./ui/styles";
 
-const baseStyles = `
-:root { color-scheme: light; --fg: #111; --muted: #555; --bg: #fff; --accent: #0b5cad; }
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--fg);
-  font: 18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-main { max-width: 32rem; margin: 0 auto; padding: 2rem 1rem; }
-h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 .75rem; }
-p { margin: 0 0 1rem; color: var(--muted); }
-`;
+type LayoutProps = {
+  lang: Lang;
+  /** Full URL of the current page, for the language switch. */
+  url: string;
+  /** Page-specific part of the <title>; the app name is appended. */
+  title?: string;
+  /** Shown top left next to the language switch; defaults to the app name. */
+  heading?: Child;
+  children: Child;
+};
 
-const appName = "Lauf-Register";
-
-/** Page shell. `title` is the page-specific part; the app name is appended. */
-export function Layout(props: { title?: string; children: Child }) {
+/** Page shell for every public page: header with the Deutsch / English switch, inline styles. */
+export function Layout(props: LayoutProps) {
+  const appName = strings(props.lang).appName;
   return (
     <>
       {raw("<!DOCTYPE html>")}
-      <html lang="de">
+      <html lang={props.lang}>
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>{props.title ? `${props.title} – ${appName}` : appName}</title>
-          <style>{raw(baseStyles)}</style>
+          <style>{raw(styles)}</style>
         </head>
         <body>
+          <header class="top">
+            <p class="top-title">{props.heading ?? appName}</p>
+            <nav class="lang">
+              {LANGS.map((lang, i) => (
+                <>
+                  {i > 0 && " · "}
+                  {lang === props.lang ? (
+                    <span>{LANG_NAMES[lang]}</span>
+                  ) : (
+                    <a href={languageSwitchHref(props.url, lang)} hreflang={lang} lang={lang} data-lang-link>
+                      {LANG_NAMES[lang]}
+                    </a>
+                  )}
+                </>
+              ))}
+            </nav>
+          </header>
           <main>{props.children}</main>
         </body>
       </html>

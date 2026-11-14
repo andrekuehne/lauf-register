@@ -3,6 +3,11 @@
   "name": "lauf-register",
   "main": "src/index.tsx",
   "compatibility_date": "2026-11-01",
+  "build": {
+    // Bundles the browser flow into src/generated/ (see scripts/build-client.mjs).
+    "command": "node scripts/build-client.mjs",
+    "watch_dir": ["src/client", "src/domain", "src/shared", "src/ui"]
+  },
   "observability": { "enabled": true },
   "d1_databases": [
     {

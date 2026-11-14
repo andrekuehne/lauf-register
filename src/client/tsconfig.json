@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2017", "dom"],
+    "types": []
+  },
+  "include": ["./**/*.ts", "../domain", "../shared", "../registration/flow-config.ts", "../ui/icon-svgs.ts"]
+}

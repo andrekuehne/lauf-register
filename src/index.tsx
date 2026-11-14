@@ -1,25 +1,36 @@
 import { Hono } from "hono";
+import { strings } from "./i18n";
+import { language, type AppEnv } from "./language";
 import { Layout } from "./layout";
+import { fakeBackend } from "./prototype/fake-backend";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<AppEnv>();
 
-app.get("/", (c) =>
-  c.html(
-    <Layout>
-      <h1>Lauf-Register</h1>
-      <p>Die Anmeldung zum Lauf ist hier bald möglich.</p>
+app.use(language);
+
+app.get("/", (c) => {
+  const lang = c.get("lang");
+  return c.html(
+    <Layout lang={lang} url={c.req.url}>
+      <h1>{strings(lang).appName}</h1>
+      <p class="muted">{strings(lang).home.text}</p>
     </Layout>,
-  ),
-);
+  );
+});
 
-app.notFound((c) =>
-  c.html(
-    <Layout title="Seite nicht gefunden">
-      <h1>Seite nicht gefunden</h1>
-      <p>Bitte prüfe den Link oder scanne den QR-Code erneut.</p>
+// TEMPORARY (#3): demo Race and fake submit. Removed together with src/prototype/ in #5.
+app.route("/", fakeBackend);
+
+app.notFound((c) => {
+  const lang = c.get("lang");
+  const t = strings(lang).notFound;
+  return c.html(
+    <Layout lang={lang} url={c.req.url} title={t.title}>
+      <h1>{t.title}</h1>
+      <p class="muted">{t.text}</p>
     </Layout>,
     404,
-  ),
-);
+  );
+});
 
 export default app;
