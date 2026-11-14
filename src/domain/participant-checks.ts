@@ -11,12 +11,13 @@ export const KIDS_AGE_LIMIT = 12;
 /** Below this a four-digit "year" is a typo, not a birth year. */
 export const OLDEST_VALID_BIRTH_YEAR = 1800;
 
-export type BirthYearError = "format" | "future";
+export type BirthYearError = "format" | "too-early" | "future";
 
 /** Why a birth year can't be accepted at all, or null if it can (it may still be implausible). */
 export function birthYearError(input: string, raceYear: number): BirthYearError | null {
   const trimmed = input.trim();
-  if (!/^\d{4}$/.test(trimmed) || Number(trimmed) < OLDEST_VALID_BIRTH_YEAR) return "format";
+  if (!/^\d{4}$/.test(trimmed)) return "format";
+  if (Number(trimmed) < OLDEST_VALID_BIRTH_YEAR) return "too-early";
   if (Number(trimmed) > raceYear) return "future";
   return null;
 }

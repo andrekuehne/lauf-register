@@ -4,5 +4,6 @@
     "lib": ["es2017", "dom"],
     "types": []
   },
+  "exclude": [],
   "include": ["./**/*.ts", "../domain", "../shared", "../registration/flow-config.ts", "../ui/icon-svgs.ts"]
 }

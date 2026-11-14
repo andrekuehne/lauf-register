@@ -4,7 +4,7 @@ import { DIVISIONS, DURATIONS, TITLES } from "../domain/categories";
 import { flowBundle } from "../generated/flow-bundle";
 import { strings, type FlowStrings, type Lang } from "../i18n";
 import type { AppEnv } from "../language";
-import { Layout } from "../layout";
+import { LanguageSwitch, Layout } from "../layout";
 import { divisionIconSvg, ICONS } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
 import { FLOW_CONFIG_ID, type FlowConfig } from "./flow-config";
@@ -38,8 +38,7 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
   // Browser autofill only for the first slot: it's usually the phone's owner.
   const auto = (value: string) => (slot === 0 ? value : "off");
   return (
-    <div class="person" data-person={slot} role="group" aria-labelledby={id("slot")}>
-      <h3 id={id("slot")} data-slot-label></h3>
+    <div class="person" data-person={slot}>
       <div class="field">
         <span class="label" id={id("title-label")}>{t.title}</span>
         <div class="pills" role="radiogroup" aria-labelledby={id("title-label")}>
@@ -52,6 +51,7 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
         </div>
         <p class="hint" data-hint="title" hidden></p>
       </div>
+      <div class="row">
       <div class="field">
         <label class="label" for={id("firstName")}>{t.firstName}</label>
         <input type="text" id={id("firstName")} data-field="firstName" autocomplete={auto("given-name")} autocapitalize="words" />
@@ -61,6 +61,7 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
         <label class="label" for={id("lastName")}>{t.lastName}</label>
         <input type="text" id={id("lastName")} data-field="lastName" autocomplete={auto("family-name")} autocapitalize="words" />
         <p class="error" data-error="lastName" hidden></p>
+      </div>
       </div>
       <div class="field">
         <label class="label" for={id("year")}>{t.birthYear}</label>
@@ -101,9 +102,11 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
         <p class="note">{t.noscript}</p>
       </noscript>
       <div id="flow" hidden>
-        <nav class="bar" id="bar" aria-label={t.selectionLabel} hidden></nav>
-        <div id="stepno">
-          <p class="stepno"></p>
+        <div class="bar" id="bar">
+          <div class="bar-row">
+            <nav class="bar-sel" id="bar-sel" aria-label={t.selectionLabel}></nav>
+            <span class="stepno" id="stepno"></span>
+          </div>
           <div class="progress">
             <i></i>
           </div>
@@ -136,15 +139,17 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
           <button type="button" class="back" data-back>{t.back}</button>
         </section>
 
-        <section data-step="details" hidden>
-          <h2 tabindex={-1} data-details-heading>{t.detailsHeadingSingle}</h2>
-          <form id="details-form" novalidate>
-            <PersonFields slot={0} t={t} />
-            <PersonFields slot={1} t={t} />
-            <button type="submit" class="btn">{t.next}</button>
-          </form>
-          <button type="button" class="back" data-back>{t.back}</button>
-        </section>
+        {[0, 1].map((slot) => (
+          <section data-step={slot === 0 ? "details" : "details-2"} hidden>
+            <h2 tabindex={-1} data-details-heading></h2>
+            <p class="pair-note" data-pair-note hidden></p>
+            <form class="details-form" data-slot={slot} novalidate>
+              <PersonFields slot={slot} t={t} />
+              <button type="submit" class="btn">{t.next}</button>
+            </form>
+            <button type="button" class="back" data-back>{t.back}</button>
+          </section>
+        ))}
 
         <section data-step="check" hidden>
           <h2 tabindex={-1}>{t.checkHeading}</h2>
@@ -175,6 +180,9 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
           <button type="button" class="btn btn-secondary" id="another">{t.another}</button>
         </section>
       </div>
+      <footer class="foot-lang" id="foot-lang" hidden>
+        <LanguageSwitch lang={lang} url={c.req.url} />
+      </footer>
       <script type="application/json" id={FLOW_CONFIG_ID}>{raw(scriptJson(config))}</script>
       <script>{raw(flowBundle)}</script>
     </Layout>,

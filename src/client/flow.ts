@@ -50,10 +50,12 @@ type State = {
   result?: { number: number };
 };
 
-const STEPS = ["division", "duration", "details", "check", "done"] as const;
+/** "details" is the first (or only) person, "details-2" the second person of a Pair. */
+const STEPS = ["division", "duration", "details", "details-2", "check", "done"] as const;
 type Step = (typeof STEPS)[number];
-/** "done" isn't counted in "Step n of 4". */
-const COUNTED_STEPS = STEPS.length - 1;
+/** "Step n of 4": both persons of a Pair share step 3, "done" isn't counted. */
+const STEP_NUMBERS: Record<Step, number> = { division: 1, duration: 2, details: 3, "details-2": 3, check: 4, done: 4 };
+const COUNTED_STEPS = 4;
 const SUBMIT_TIMEOUT_MS = 15000;
 
 const config: FlowConfig = JSON.parse(byId(FLOW_CONFIG_ID).textContent || "{}");
@@ -138,10 +140,12 @@ function isPair(): boolean {
   return genders().length === 2;
 }
 
+/** "Erste Person · Frau" etc.; empty for a single Participant. */
 function slotLabel(slot: number): string {
   if (!isPair()) return "";
-  if (state.division === "mixed_pair") return slot === 0 ? t.slotWoman : t.slotMan;
-  return fill(t.slotParticipant, { n: slot + 1 });
+  const person = slot === 0 ? t.pairFirst : t.pairSecond;
+  if (state.division !== "mixed_pair") return person;
+  return `${person} · ${slot === 0 ? t.slotWoman : t.slotMan}`;
 }
 
 function personErrors(p: Participant): FieldMessages {
@@ -151,12 +155,13 @@ function personErrors(p: Participant): FieldMessages {
   const yearError = birthYearError(p.birthYear, config.raceYear);
   if (!p.birthYear.trim()) errors.birthYear = t.required;
   else if (yearError === "future") errors.birthYear = t.birthYearFuture;
+  else if (yearError === "too-early") errors.birthYear = t.birthYearTooEarly;
   else if (yearError) errors.birthYear = t.birthYearInvalid;
   return errors;
 }
 
-function detailsComplete(): boolean {
-  return activeParticipants().every((p) => Object.keys(personErrors(p)).length === 0);
+function participantComplete(slot: number): boolean {
+  return Object.keys(personErrors(state.participants[slot]!)).length === 0;
 }
 
 /** Gentle, non-blocking hints for one person. */
@@ -183,7 +188,8 @@ function furthestStep(): Step {
   if (state.result) return "done";
   if (!state.division) return "division";
   if (!state.duration) return "duration";
-  if (!detailsComplete()) return "details";
+  if (!participantComplete(0)) return "details";
+  if (isPair() && !participantComplete(1)) return "details-2";
   return "check";
 }
 
@@ -228,19 +234,26 @@ function go(step: Step, replace = false) {
 }
 
 /** In-app back: one step back, through the browser history when that's where we came from. */
+function previousStep(step: Step): Step {
+  if (step === "check") return isPair() ? "details-2" : "details";
+  return STEPS[Math.max(0, STEPS.indexOf(step) - 1)]!;
+}
+
 function goBack() {
-  const previous = STEPS[Math.max(0, STEPS.indexOf(currentStep || "division") - 1)]!;
+  const previous = previousStep(currentStep || "division");
   const entry = historyEntry();
   if (entry && entry.from === previous) history.back();
   else go(previous, true);
 }
 
 function onRoute() {
-  const wanted = stepFromHash();
+  const fromHash = stepFromHash();
+  // A single Participant has no second person.
+  const wanted = fromHash === "details-2" && !isPair() ? "details" : fromHash;
   const furthest = furthestStep();
   const allowed =
     state.result ? "done" : !wanted || wanted === "done" || STEPS.indexOf(wanted) > STEPS.indexOf(furthest) ? furthest : wanted;
-  if (allowed !== wanted || !historyEntry()) replaceStep(allowed);
+  if (allowed !== fromHash || !historyEntry()) replaceStep(allowed);
   render(allowed);
 }
 
@@ -254,12 +267,15 @@ function render(step: Step) {
   byId("flow").className = state.division ? `div-${state.division}` : "";
   all("[data-step]").forEach((section) => show(section, section.getAttribute("data-step") === step));
   renderBar(step);
-  renderStepNumber(step);
   updateLanguageLinks();
+  // The Race name heads the first step only; later steps keep the screen for the form.
+  show(document.querySelector("header.top"), step === "division");
+  show(byId("foot-lang"), step !== "division");
 
   if (step === "division") renderChoices("[data-division]", "data-division", state.division);
   if (step === "duration") renderChoices("[data-duration]", "data-duration", state.duration && String(state.duration));
-  if (step === "details") renderDetails();
+  if (step === "details") renderDetails(0);
+  if (step === "details-2") renderDetails(1);
   if (step === "check") renderCheck();
   if (step === "done") renderDone();
 
@@ -271,11 +287,11 @@ function render(step: Step) {
 }
 
 function renderBar(step: Step) {
-  const bar = byId("bar");
+  const bar = byId("bar-sel");
   bar.innerHTML = "";
   const parts: [string, Step][] = [];
   if (state.division) parts.push([t.divisions[state.division].name, "division"]);
-  if (state.duration) parts.push([t.durations[state.duration].name, "duration"]);
+  if (state.duration) parts.push([t.durations[state.duration].short, "duration"]);
   const names = activeParticipants().map(shortName).filter((n) => n.trim());
   if (names.length) parts.push([names.join(" & "), "details"]);
   parts.forEach((part, i) => {
@@ -291,15 +307,10 @@ function renderBar(step: Step) {
     button.onclick = () => go(target);
     bar.appendChild(button);
   });
-  show(bar, parts.length > 0 && step !== "done");
-}
-
-function renderStepNumber(step: Step) {
-  const box = byId("stepno");
-  const n = STEPS.indexOf(step) + 1;
-  show(box, step !== "done");
-  (box.querySelector(".stepno") as HTMLElement).textContent = fill(t.stepOf, { n, total: COUNTED_STEPS });
-  (box.querySelector(".progress i") as HTMLElement).style.width = `${(n / COUNTED_STEPS) * 100}%`;
+  const n = STEP_NUMBERS[step];
+  byId("stepno").textContent = fill(t.stepOf, { n, total: COUNTED_STEPS });
+  (document.querySelector("#bar .progress i") as HTMLElement).style.width = `${(n / COUNTED_STEPS) * 100}%`;
+  show(byId("bar"), step !== "done");
 }
 
 /** Keep the current step when switching language (the server keeps the fragment across its redirect). */
@@ -323,24 +334,24 @@ function field(slot: number, name: string): HTMLInputElement {
   return personBox(slot).querySelector(`[data-field="${name}"]`) as HTMLInputElement;
 }
 
-function renderDetails() {
-  (document.querySelector("[data-details-heading]") as HTMLElement).textContent = isPair() ? t.detailsHeadingPair : t.detailsHeadingSingle;
-  [0, 1].forEach((slot) => {
-    const box = personBox(slot);
-    const p = state.participants[slot]!;
-    show(box, slot < genders().length);
-    const label = box.querySelector("[data-slot-label]") as HTMLElement;
-    label.textContent = slotLabel(slot);
-    show(label, isPair());
-    all<HTMLInputElement>('[data-field="title"]', box).forEach((radio) => {
-      radio.checked = radio.value === p.title;
-    });
-    field(slot, "firstName").value = p.firstName;
-    field(slot, "lastName").value = p.lastName;
-    field(slot, "birthYear").value = p.birthYear;
-    field(slot, "club").value = p.club;
-    renderHints(slot);
+function renderDetails(slot: number) {
+  const section = document.querySelector(`[data-step="${slot === 0 ? "details" : "details-2"}"]`) as HTMLElement;
+  (section.querySelector("[data-details-heading]") as HTMLElement).textContent = isPair()
+    ? slotLabel(slot)
+    : t.detailsHeadingSingle;
+  const note = section.querySelector("[data-pair-note]") as HTMLElement;
+  note.textContent = slot === 0 ? t.pairFirstNote : t.pairSecondNote;
+  show(note, isPair());
+  const box = personBox(slot);
+  const p = state.participants[slot]!;
+  all<HTMLInputElement>('[data-field="title"]', box).forEach((radio) => {
+    radio.checked = radio.value === p.title;
   });
+  field(slot, "firstName").value = p.firstName;
+  field(slot, "lastName").value = p.lastName;
+  field(slot, "birthYear").value = p.birthYear;
+  field(slot, "club").value = p.club;
+  renderHints(slot);
 }
 
 function renderHints(slot: number) {
@@ -537,22 +548,23 @@ all("[data-back]").forEach((button) => {
   };
 });
 
-byId("details-form").onsubmit = (event) => {
-  event.preventDefault();
-  let firstInvalid: HTMLInputElement | undefined;
-  activeParticipants().forEach((p, slot) => {
-    const errors = personErrors(p);
+all<HTMLFormElement>(".details-form").forEach((form) => {
+  const slot = Number(form.getAttribute("data-slot"));
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    const errors = personErrors(state.participants[slot]!);
+    let firstInvalid: HTMLInputElement | undefined;
     TEXT_FIELDS.forEach((name) => {
       setError(slot, name, errors[name]);
       if (errors[name] && !firstInvalid) firstInvalid = field(slot, name);
     });
-  });
-  if (firstInvalid) {
-    firstInvalid.focus();
-    return;
-  }
-  go("check");
-};
+    if (firstInvalid) {
+      firstInvalid.focus();
+      return;
+    }
+    go(furthestStep());
+  };
+});
 
 byId<HTMLInputElement>("consent").onchange = (event) => {
   state.consent = (event.target as HTMLInputElement).checked;

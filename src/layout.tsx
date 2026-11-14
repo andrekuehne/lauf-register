@@ -15,6 +15,26 @@ type LayoutProps = {
   children: Child;
 };
 
+/** "Deutsch · English": the current language as text, the other as a link. */
+export function LanguageSwitch(props: { lang: Lang; url: string }) {
+  return (
+    <>
+      {LANGS.map((lang, i) => (
+        <>
+          {i > 0 && " · "}
+          {lang === props.lang ? (
+            <span>{LANG_NAMES[lang]}</span>
+          ) : (
+            <a href={languageSwitchHref(props.url, lang)} hreflang={lang} lang={lang} data-lang-link>
+              {LANG_NAMES[lang]}
+            </a>
+          )}
+        </>
+      ))}
+    </>
+  );
+}
+
 /** Page shell for every public page: header with the Deutsch / English switch, inline styles. */
 export function Layout(props: LayoutProps) {
   const appName = strings(props.lang).appName;
@@ -32,18 +52,7 @@ export function Layout(props: LayoutProps) {
           <header class="top">
             <p class="top-title">{props.heading ?? appName}</p>
             <nav class="lang">
-              {LANGS.map((lang, i) => (
-                <>
-                  {i > 0 && " · "}
-                  {lang === props.lang ? (
-                    <span>{LANG_NAMES[lang]}</span>
-                  ) : (
-                    <a href={languageSwitchHref(props.url, lang)} hreflang={lang} lang={lang} data-lang-link>
-                      {LANG_NAMES[lang]}
-                    </a>
-                  )}
-                </>
-              ))}
+              <LanguageSwitch lang={props.lang} url={props.url} />
             </nav>
           </header>
           <main>{props.children}</main>
