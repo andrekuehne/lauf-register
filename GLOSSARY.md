@@ -9,6 +9,7 @@ Phone-first self-registration of participants on race day for timed runs, where 
 **Race**:
 A single race day, created in advance by an Admin, with its own QR code that leads participants to registration.
 _Avoid_: Event, run
+_German (UI)_: Lauf
 
 **Division**:
 Who competes together: one of *Men*, *Women*, *Men's pair*, *Women's pair*, *Mixed pair*.
@@ -27,10 +28,15 @@ _Avoid_: Sub race, race type, heat
 **Registration**:
 One submitted sign-up for one Category within one Race, covering either a single Participant or a Pair.
 _Avoid_: Entry, sign-up, booking
+_German (UI)_: Anmeldung
 
 **Participant**:
-One person named on a Registration, with a first name, last name, birth year and optional club.
+One person named on a Registration, with a Title, first name, last name, birth year and optional club.
 _Avoid_: Runner, athlete, user
+
+**Title**:
+How a Participant is addressed: one of *–* (none), *Dr.*, *Frau*, *Herr*, *Kids*. *Kids* marks a child; what it means for the export is still open.
+_Avoid_: Salutation, prefix
 
 **Pair**:
 Two Participants registered together on one Registration in a pair Division; in a *Mixed pair* the slots are fixed as one woman and one man.
