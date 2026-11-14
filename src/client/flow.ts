@@ -319,7 +319,8 @@ function renderBar(step: Step) {
   const bar = byId("bar-sel");
   bar.innerHTML = "";
   const parts: [string, Step][] = [];
-  if (state.duration) parts.push([t.durations[state.duration].name, "duration"]);
+  // Short Duration names keep the one-line bar from scrolling as often.
+  if (state.duration) parts.push([t.durations[state.duration].short, "duration"]);
   if (state.singleOrPair) parts.push([t.singleOrPair[state.singleOrPair].name, "single-or-pair"]);
   const chosen = chosenDivision();
   if (chosen) parts.push([t.divisions[chosen].name, "division"]);

@@ -38,8 +38,8 @@ const de = {
     next: "Weiter",
     durationHeading: "Welcher Lauf?",
     durations: {
-      "30": { name: "Halbstundenlauf", detail: "30 Minuten" },
-      "60": { name: "Stundenlauf", detail: "60 Minuten" },
+      "30": { name: "Halbstundenlauf", short: "1/2 h", detail: "30 Minuten" },
+      "60": { name: "Stundenlauf", short: "1 h", detail: "60 Minuten" },
     },
     singleOrPairHeading: "Einzeln oder zu zweit?",
     singleOrPair: {
@@ -117,8 +117,8 @@ const en: Strings = {
     next: "Next",
     durationHeading: "Which run?",
     durations: {
-      "30": { name: "Half-hour run", detail: "30 minutes" },
-      "60": { name: "One-hour run", detail: "60 minutes" },
+      "30": { name: "Half-hour run", short: "1/2 h", detail: "30 minutes" },
+      "60": { name: "One-hour run", short: "1 h", detail: "60 minutes" },
     },
     singleOrPairHeading: "Alone or as a pair?",
     singleOrPair: {
