@@ -1,0 +1,3 @@
+# Cloudflare Workers + D1 instead of Supabase
+
+The app runs as a single Cloudflare Worker. That one Worker serves the pages and a small API, and stores data in a D1 (SQLite) database. Supabase was the obvious alternative, and we rejected it for two reasons. With Supabase, the browser talks to the database directly, so row-level security would have to stop participants from reading other people's Registrations. Free Supabase projects also pause when inactive, and the app sits unused between race days. With Workers, all data access goes through the Worker, everything ships as one deployment, and the free tier comfortably covers a few hundred Registrations per Race.
