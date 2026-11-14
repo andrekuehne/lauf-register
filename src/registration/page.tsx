@@ -3,7 +3,7 @@ import { raw } from "hono/html";
 import { DIVISIONS, DURATIONS, GENDERS, SINGLE_OR_PAIR, TITLES } from "../domain/categories";
 import { MAX_TEXT_LENGTH } from "../domain/participant-checks";
 import { flowBundle } from "../generated/flow-bundle";
-import { strings, type FlowStrings } from "../i18n";
+import { strings, type FlowStrings, type Lang } from "../i18n";
 import { formatRaceDateLong, raceYear } from "../races/race-dates";
 import type { AppEnv } from "../language";
 import { Layout } from "../layout";
@@ -18,6 +18,16 @@ export type PublicRace = {
   /** ISO date, YYYY-MM-DD. */
   date: string;
 };
+
+/** Top left on every page of a Race: its name with the date below. */
+function RaceHeading(props: { race: PublicRace; lang: Lang }) {
+  return (
+    <>
+      {props.race.name}
+      <span class="top-sub">{formatRaceDateLong(props.race.date, props.lang)}</span>
+    </>
+  );
+}
 
 /** JSON that is safe inside a <script> element. */
 function scriptJson(value: unknown): string {
@@ -103,15 +113,8 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
     raceYear: raceYear(race),
     t,
   };
-  const heading = (
-    <>
-      {race.name}
-      <span class="top-sub">{formatRaceDateLong(race.date, lang)}</span>
-    </>
-  );
-
   return c.html(
-    <Layout lang={lang} url={c.req.url} title={race.name} heading={heading}>
+    <Layout lang={lang} url={c.req.url} title={race.name} heading={<RaceHeading race={race} lang={lang} />}>
       <noscript>
         <p class="note">{t.noscript}</p>
       </noscript>
@@ -190,6 +193,7 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
             <p class="error" id="consent-error" hidden>{t.consentRequired}</p>
             <p class="alert" id="offline" role="alert" hidden>{t.offline}</p>
             <p class="alert" id="rejected" role="alert" hidden>{t.rejected}</p>
+            <p class="alert" id="closed" role="alert" hidden>{t.closed}</p>
             <button type="submit" class="btn" id="submit">{t.submit}</button>
           </form>
           <button type="button" class="back" data-back>{t.back}</button>
@@ -210,6 +214,18 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
       </div>
       <script type="application/json" id={FLOW_CONFIG_ID}>{raw(scriptJson(config))}</script>
       <script>{raw(flowBundle)}</script>
+    </Layout>,
+  );
+}
+
+/** Shown instead of the flow while an Admin has Registration for the Race closed. */
+export function registrationClosedPage(c: Context<AppEnv>, race: PublicRace) {
+  const lang = c.get("lang");
+  const t = strings(lang).registrationClosed;
+  return c.html(
+    <Layout lang={lang} url={c.req.url} title={race.name} heading={<RaceHeading race={race} lang={lang} />}>
+      <h1>{t.title}</h1>
+      <p>{t.text}</p>
     </Layout>,
   );
 }

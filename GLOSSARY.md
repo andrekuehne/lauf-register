@@ -11,6 +11,11 @@ A single race day, created in advance by an Admin, with its own QR code that lea
 _Avoid_: Event, run
 _German (UI)_: Lauf
 
+**Registration open / closed**:
+Whether participants can register for a Race through its link right now. An Admin opens and closes it by hand; a new Race starts closed. While it is closed, participants register at the Race desk.
+_Avoid_: Active, enabled, published
+_German (UI)_: Anmeldung offen / geschlossen
+
 **Division**:
 Who competes together: one of *Men*, *Women*, *Men's pair*, *Women's pair*, *Mixed pair*. It follows from whether a Registration is single or a Pair and from its Participants' Genders.
 _Avoid_: Class, type (and *Gender*, which belongs to a Participant)

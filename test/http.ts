@@ -21,12 +21,17 @@ export async function request(path: string, init: RequestInit = {}) {
 export const asAdmin = (path: string, init: RequestInit = {}) =>
   request(path, { ...init, headers: { "x-test-admin": ADMIN, ...(init.headers ?? {}) } });
 
-export function postRace(fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
-  return request("/admin/races", {
+/** Posts an admin form, signed in as the test Admin unless other headers are given. */
+function postForm(path: string, fields: Record<string, string>, headers: Record<string, string>) {
+  return request(path, {
     method: "POST",
     body: new URLSearchParams(fields),
     headers: { origin: ORIGIN, "content-type": "application/x-www-form-urlencoded", ...headers },
   });
+}
+
+export function postRace(fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  return postForm("/admin/races", fields, headers);
 }
 
 /** The public /r/… links on the admin Race list, newest race day first. */
@@ -35,11 +40,25 @@ export async function publicLinks(): Promise<string[]> {
   return [...html.matchAll(/href="(\/r\/[^"]+)"/g)].map((m) => m[1]!);
 }
 
-/** Creates a Race through the admin area and returns its public link. */
-export async function newRace(name: string, date = "2026-12-09"): Promise<string> {
+/**
+ * Opens or closes Registration for the Race behind a public link, through the
+ * admin area. A string is sent as the raw form value.
+ */
+export function setRegistration(raceLink: string, open: boolean | string, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  const value = open === true ? "1" : open === false ? "0" : open;
+  return postForm(`/admin/races/${raceLink.slice("/r/".length)}/registration`, { open: value }, headers);
+}
+
+/**
+ * Creates a Race through the admin area and returns its public link. A new Race
+ * starts closed; as most tests need to register, this opens it unless
+ * `open: false` is passed.
+ */
+export async function newRace(name: string, date = "2026-12-09", options: { open?: boolean } = {}): Promise<string> {
   const before = new Set(await publicLinks());
   await postRace({ name, date });
   const link = (await publicLinks()).find((l) => !before.has(l));
   if (!link) throw new Error(`Race "${name}" was not created`);
+  if (options.open ?? true) await setRegistration(link, true);
   return link;
 }

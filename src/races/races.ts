@@ -1,4 +1,4 @@
-// Races in D1: creating, listing and looking up by public token.
+// Races in D1: creating, listing, looking up by public token, opening and closing Registration.
 
 import type { RaceInput } from "./race-input";
 
@@ -10,11 +10,21 @@ export type Race = {
   date: string;
   createdAt: string;
   createdBy: string;
+  /** Whether participants can register through the public link. New Races start closed. */
+  registrationOpen: boolean;
 };
 
 export type RaceListItem = Race & { registrationCount: number };
 
-type RaceRow = { id: number; token: string; name: string; date: string; created_at: string; created_by: string };
+type RaceRow = {
+  id: number;
+  token: string;
+  name: string;
+  date: string;
+  created_at: string;
+  created_by: string;
+  registration_open: number;
+};
 
 const fromRow = (row: RaceRow): Race => ({
   id: row.id,
@@ -23,6 +33,7 @@ const fromRow = (row: RaceRow): Race => ({
   date: row.date,
   createdAt: row.created_at,
   createdBy: row.created_by,
+  registrationOpen: row.registration_open === 1,
 });
 
 // Lowercase letters and digits without look-alikes (no 0/o, 1/l/i): 31 characters.
@@ -66,6 +77,12 @@ export async function listRaces(db: D1Database): Promise<RaceListItem[]> {
     )
     .all<RaceRow & { registration_count: number }>();
   return results.map((row) => ({ ...fromRow(row), registrationCount: row.registration_count }));
+}
+
+/** Opens or closes Registration for a Race. False when there is no Race with that token. */
+export async function setRegistrationOpen(db: D1Database, token: string, open: boolean): Promise<boolean> {
+  const result = await db.prepare("UPDATE races SET registration_open = ? WHERE token = ?").bind(open ? 1 : 0, token).run();
+  return result.meta.changes > 0;
 }
 
 export async function findRaceByToken(db: D1Database, token: string): Promise<Race | null> {

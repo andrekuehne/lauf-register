@@ -30,6 +30,10 @@ const de = {
     title: "Lauf nicht gefunden",
     text: "Zu diesem Link gibt es keinen Lauf (mehr). Bitte scanne den QR-Code am Veranstaltungsort erneut.",
   },
+  registrationClosed: {
+    title: "Anmeldung geschlossen",
+    text: "Die Online-Anmeldung für diesen Lauf ist gerade geschlossen. Bitte melde dich am Anmeldetisch.",
+  },
   flow: {
     noscript: "Für die Anmeldung wird JavaScript benötigt. Bitte aktiviere es oder melde dich am Anmeldetisch an.",
     selectionLabel: "Deine Auswahl",
@@ -86,6 +90,7 @@ const de = {
     offline: "Keine Verbindung. Deine Angaben bleiben gespeichert.",
     retry: "Erneut senden",
     rejected: "Die Anmeldung hat nicht geklappt. Bitte melde dich am Anmeldetisch.",
+    closed: "Die Online-Anmeldung ist inzwischen geschlossen. Bitte melde dich am Anmeldetisch.",
     doneHeading: "Angemeldet!",
     numberLabel: "Deine Startnummer",
     deskHint: "Zeige diese Nummer am Anmeldetisch.",
@@ -108,6 +113,10 @@ const en: Strings = {
   raceNotFound: {
     title: "Race not found",
     text: "This link doesn't belong to a race (any more). Please scan the QR code at the venue again.",
+  },
+  registrationClosed: {
+    title: "Registration closed",
+    text: "Online registration for this race is closed right now. Please go to the race desk.",
   },
   flow: {
     noscript: "Registration needs JavaScript. Please turn it on or register at the race desk.",
@@ -163,6 +172,7 @@ const en: Strings = {
     offline: "No connection. Your details are kept.",
     retry: "Try again",
     rejected: "The registration didn't go through. Please go to the race desk.",
+    closed: "Online registration has closed in the meantime. Please go to the race desk.",
     doneHeading: "You're registered!",
     numberLabel: "Your start number",
     deskHint: "Show this number at the race desk.",

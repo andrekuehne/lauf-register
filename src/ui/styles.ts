@@ -3,7 +3,7 @@
 
 export const styles = `
 :root{color-scheme:light;--fg:#111827;--muted:#4b5563;--bg:#f3f4f6;--card:#fff;--line:#9ca3af;
---accent:#0b5cad;--danger:#b91c1c;--warn-bg:#fff7ed;--warn-line:#c2410c;--warn-fg:#7c2d12;--c:#374151}
+--accent:#0b5cad;--ok:#15803d;--danger:#b91c1c;--warn-bg:#fff7ed;--warn-line:#c2410c;--warn-fg:#7c2d12;--c:#374151}
 .div-women{--c:#be185d}.div-men{--c:#1d4ed8}.div-womens_pair{--c:#7e22ce}.div-mens_pair{--c:#0f766e}.div-mixed_pair{--c:#c2410c}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -99,5 +99,12 @@ border:2px solid var(--line);border-radius:24px;background:#fff;font-weight:600;
 .race-list li>*{display:block}
 .race-name{font-size:1.15rem}
 .race-link{margin:6px 0;color:var(--accent);word-break:break-all}
+.race-list li>.reg-switch{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:4px 0 8px}
+.reg-state{margin-right:12px}
+.reg-open{color:var(--ok)}
+.form-note{margin:10px 0 0;font-size:.9rem}
+.reg-closed{color:var(--muted)}
+.btn-small{min-height:44px;padding:8px 14px;font:inherit;font-size:.95rem;font-weight:700;color:var(--accent);background:var(--card);
+border:2px solid var(--accent);border-radius:10px;cursor:pointer}
 .note{padding:12px;background:var(--warn-bg);border-radius:8px}
 `;

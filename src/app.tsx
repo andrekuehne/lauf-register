@@ -6,7 +6,7 @@ import { language, type AppEnv } from "./language";
 import { Layout } from "./layout";
 import { raceYear } from "./races/race-dates";
 import { findRaceByToken } from "./races/races";
-import { raceNotFoundPage, registrationPage } from "./registration/page";
+import { raceNotFoundPage, registrationClosedPage, registrationPage } from "./registration/page";
 import { validateRegistrationInput } from "./registration/registration-input";
 import { submitRegistration } from "./registration/registrations";
 
@@ -30,7 +30,8 @@ export function createApp(deps: { identity: AdminIdentity }) {
 
   app.get("/r/:token", async (c) => {
     const race = await findRaceByToken(c.env.DB, c.req.param("token"));
-    return race ? registrationPage(c, race) : raceNotFoundPage(c);
+    if (!race) return raceNotFoundPage(c);
+    return race.registrationOpen ? registrationPage(c, race) : registrationClosedPage(c, race);
   });
 
   // Called by the browser flow (src/client/flow.ts), JSON in and out.
@@ -39,9 +40,14 @@ export function createApp(deps: { identity: AdminIdentity }) {
     if (!race) return c.json({ error: "race not found" }, 404);
     const body = await c.req.json().catch(() => undefined);
     const result = validateRegistrationInput(body, raceYear(race));
-    if (!result.ok) return c.json({ error: "invalid registration", issues: result.issues }, 400);
-    const number = await submitRegistration(c.env.DB, race.id, result.input);
-    return c.json({ number });
+    if (!result.ok) {
+      if (!race.registrationOpen) return c.json({ error: "registration closed" }, 409);
+      return c.json({ error: "invalid registration", issues: result.issues }, 400);
+    }
+    const submitted = await submitRegistration(c.env.DB, race.id, result.input);
+    // A form opened before the Admin closed Registration ends up here; the flow shows the closed message.
+    if ("closed" in submitted) return c.json({ error: "registration closed" }, 409);
+    return c.json({ number: submitted.number });
   });
 
   app.notFound((c) => {

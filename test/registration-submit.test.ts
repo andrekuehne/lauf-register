@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { asAdmin, newRace, request } from "./http";
+import { asAdmin, newRace, request, setRegistration } from "./http";
 
 // Storage is shared by the tests in a file: start each test without Races
 // (deleting a Race also deletes its Registrations).
@@ -203,6 +203,53 @@ describe("validating a submit", () => {
     );
 
     expect(res.status).toBe(200);
+  });
+});
+
+describe("submitting to a closed Race", () => {
+  it("is rejected as closed and stores nothing, even from a form opened before closing", async () => {
+    const race = await newRace("Stundenlauf");
+    await request(race); // the form is loaded while Registration is open
+    await setRegistration(race, false);
+
+    const res = await submit(race, registration());
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "registration closed" });
+    expect(await (await asAdmin("/admin")).text()).toContain("0 Anmeldungen");
+  });
+
+  it("answers closed rather than invalid when a stale form's details no longer pass", async () => {
+    const race = await newRace("Stundenlauf");
+    await setRegistration(race, false);
+
+    const res = await submit(race, registration({ duration: 45 }));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "registration closed" });
+  });
+
+  it("accepts Registrations again after reopening, numbered on from before", async () => {
+    const race = await newRace("Stundenlauf");
+    await submit(race, registration());
+    await setRegistration(race, false);
+    await submit(race, registration());
+
+    await setRegistration(race, true);
+    const res = await submit(race, registration());
+
+    expect(await numberOf(res)).toBe(2);
+  });
+
+  it("still returns the number of a Registration stored before closing when its submit is repeated", async () => {
+    const race = await newRace("Stundenlauf");
+    const body = registration();
+    await submit(race, body); // stored, but say the answer never reached the phone
+    await setRegistration(race, false);
+
+    const repeat = await submit(race, body);
+
+    expect(await numberOf(repeat)).toBe(1);
   });
 });
 

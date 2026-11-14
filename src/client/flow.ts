@@ -450,7 +450,7 @@ function renderCheck() {
   });
   (byId("consent") as HTMLInputElement).checked = state.consent;
   show(byId("consent-error"), false);
-  show(byId("rejected"), false);
+  hideSubmitAlerts();
 }
 
 function renderDone() {
@@ -463,6 +463,11 @@ function renderDone() {
 }
 
 // ---------- submit ----------
+
+/** "No connection", "didn't go through" and "closed": at most one shows, after a submit. */
+function hideSubmitAlerts() {
+  ["offline", "rejected", "closed"].forEach((id) => show(byId(id), false));
+}
 
 function setSending(sending: boolean) {
   const button = byId<HTMLButtonElement>("submit");
@@ -480,6 +485,7 @@ async function submit() {
     return;
   }
   show(byId("rejected"), false);
+  show(byId("closed"), false);
   setSending(true);
   const slotGender = genders();
   const payload = {
@@ -505,18 +511,22 @@ async function submit() {
       }),
       timeout(SUBMIT_TIMEOUT_MS),
     ]);
+    hideSubmitAlerts();
     if (response.ok) {
       const body = (await response.json()) as { number: number };
       state.result = { number: body.number };
       save();
-      show(byId("offline"), false);
       go("done", true);
     } else if (response.status >= 500) {
       show(byId("offline"), true);
+    } else if (response.status === 409) {
+      // The Admin closed Registration after this form was opened.
+      show(byId("closed"), true);
     } else {
       show(byId("rejected"), true);
     }
   } catch (e) {
+    hideSubmitAlerts();
     show(byId("offline"), true);
   }
   setSending(false);
