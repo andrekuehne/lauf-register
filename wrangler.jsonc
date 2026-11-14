@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lauf-register",
+  "main": "src/index.tsx",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lauf-register",
+      "database_id": "ab1e9984-f1c1-4485-8696-9e343f91b193",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
