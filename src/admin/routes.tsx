@@ -4,6 +4,7 @@ import { raceResultFileName, raceResultRows, RACERESULT_SHEET } from "../export/
 import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, raceYear } from "../races/race-dates";
+import { publicRaceLink, publicRacePath } from "../races/race-link";
 import { MAX_RACE_NAME_LENGTH, validateRaceInput, type RaceInput, type RaceInputErrors } from "../races/race-input";
 import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, type Race, type RaceListItem } from "../races/races";
 import {
@@ -18,6 +19,7 @@ import { normalizedText } from "../shared/same-text";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
 import { checkEdit, editRegistrationPage, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
+import { posterPage } from "./poster-page";
 import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage } from "./registrations-page";
 
 function NewRaceForm(props: { values?: Partial<RaceInput>; errors?: RaceInputErrors }) {
@@ -53,19 +55,19 @@ function RegistrationSwitch(props: { race: RaceListItem }) {
   );
 }
 
-function RaceList(props: { races: RaceListItem[]; origin: string }) {
+function RaceList(props: { races: RaceListItem[]; requestUrl: string }) {
   if (props.races.length === 0) return <p class="muted">Noch keine Läufe angelegt.</p>;
   return (
     <ul class="race-list">
       {props.races.map((race) => {
-        const link = `/r/${race.token}`;
+        const path = publicRacePath(race.token);
         return (
           <li class="card">
             <b class="race-name">{race.name}</b>
             <span class="muted">
               {formatRaceDateShort(race.date, "de")} · {registrationCount(race.registrationCount)}
             </span>
-            <a href={link} class="race-link">{`${props.origin}${link}`}</a>
+            <a href={path} class="race-link">{publicRaceLink(props.requestUrl, race.token)}</a>
             <a href={racePath(race)} class="race-regs">Anmeldungen ansehen →</a>
             <RegistrationSwitch race={race} />
             <small class="muted">angelegt von {race.createdBy}</small>
@@ -82,7 +84,7 @@ async function racesPage(c: Context<AppEnv>, form?: { values: RaceInput; errors:
     <AdminPage url={c.req.url} admin={c.get("adminEmail")}>
       <NewRaceForm values={form?.values} errors={form?.errors} />
       <h2>Läufe</h2>
-      <RaceList races={races} origin={new URL(c.req.url).origin} />
+      <RaceList races={races} requestUrl={c.req.url} />
     </AdminPage>,
     form ? 400 : 200,
   );
@@ -156,6 +158,8 @@ export function adminRoutes(identity: AdminIdentity) {
   admin.get("/races/:token", (c) =>
     withRace(c, async (race) => raceRegistrationsPage(c, race, await listRegistrations(c.env.DB, race.id))),
   );
+
+  admin.get("/races/:token/poster", (c) => withRace(c, async (race) => posterPage(c, race)));
 
   admin.get("/races/:token/export.xlsx", (c) =>
     withRace(c, async (race) => {

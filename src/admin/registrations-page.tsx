@@ -11,13 +11,16 @@ import type { ParticipantInput } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
 import { divisionIconSvg } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
+import { QrButton, QrLayer } from "../ui/qr-layer";
 import { AdminPage, registrationCount } from "./admin-page";
 
 const t = strings("de").flow;
+const qrStrings = strings("de").qr;
 
 export const racePath = (race: Race) => `/admin/races/${race.token}`;
 export const deleteRacePath = (race: Race) => `${racePath(race)}/delete`;
 const exportPath = (race: Race) => `${racePath(race)}/export.xlsx`;
+export const posterPath = (race: Race) => `${racePath(race)}/poster`;
 export const editPath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/edit`;
 const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
@@ -85,6 +88,10 @@ function RaceHeader(props: { race: Race; count: number }) {
       <a href={exportPath(props.race)} class="btn btn-secondary" download>
         Excel für RaceResult herunterladen
       </a>
+      <p class="race-qr">
+        <a href={posterPath(props.race)}>Aushang (A4) drucken</a>
+        <QrButton t={qrStrings} />
+      </p>
     </>
   );
 }
@@ -126,6 +133,7 @@ export function raceRegistrationsPage(c: Context<AppEnv>, race: Race, registrati
       <p class="race-delete">
         <a href={deleteRacePath(race)}>Lauf löschen …</a>
       </p>
+      <QrLayer t={qrStrings} requestUrl={c.req.url} race={race} />
     </AdminPage>,
   );
 }

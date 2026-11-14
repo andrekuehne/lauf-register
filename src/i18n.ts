@@ -96,6 +96,13 @@ const de = {
     deskHint: "Zeige diese Nummer am Anmeldetisch.",
     another: "Weitere Person anmelden",
   },
+  /** The Race's QR code shown full screen, to let others scan it. */
+  qr: {
+    show: "QR-Code zeigen",
+    call: "Hier anmelden",
+    share: "Link teilen",
+    close: "Schließen",
+  },
 };
 
 export type Strings = typeof de;
@@ -177,6 +184,12 @@ const en: Strings = {
     numberLabel: "Your start number",
     deskHint: "Show this number at the race desk.",
     another: "Register someone else",
+  },
+  qr: {
+    show: "Show QR code",
+    call: "Register here",
+    share: "Share link",
+    close: "Close",
   },
 };
 

@@ -5,10 +5,12 @@ import { MAX_TEXT_LENGTH } from "../domain/participant-checks";
 import { flowBundle } from "../generated/flow-bundle";
 import { strings, type FlowStrings, type Lang } from "../i18n";
 import { formatRaceDateLong, raceYear } from "../races/race-dates";
+import { publicRacePath } from "../races/race-link";
 import type { AppEnv } from "../language";
 import { Layout } from "../layout";
 import { divisionIconSvg, ICONS } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
+import { QrButton, QrLayer } from "../ui/qr-layer";
 import { FLOW_CONFIG_ID, type FlowConfig } from "./flow-config";
 
 /** What the public registration page needs to know about a Race. */
@@ -107,8 +109,9 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
 export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
   const lang = c.get("lang");
   const t = strings(lang).flow;
+  const qr = strings(lang).qr;
   const config: FlowConfig = {
-    submitUrl: `/r/${race.token}/registrations`,
+    submitUrl: `${publicRacePath(race.token)}/registrations`,
     storageKey: `lauf-register:${race.token}`,
     raceYear: raceYear(race),
     t,
@@ -140,6 +143,8 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
               </span>
             </button>
           ))}
+          {/* For others nearby to scan; kept small so it doesn’t compete with the two runs. */}
+          <QrButton t={qr} />
         </section>
 
         <section data-step="single-or-pair" hidden>
@@ -210,8 +215,10 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
           </div>
           <p style="margin-top:16px">{t.deskHint}</p>
           <button type="button" class="btn btn-secondary" id="another">{t.another}</button>
+          <QrButton t={qr} />
         </section>
       </div>
+      <QrLayer t={qr} requestUrl={c.req.url} race={race} />
       <script type="application/json" id={FLOW_CONFIG_ID}>{raw(scriptJson(config))}</script>
       <script>{raw(flowBundle)}</script>
     </Layout>,

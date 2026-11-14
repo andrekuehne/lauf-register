@@ -37,6 +37,9 @@ export function postRace(fields: Record<string, string>, headers: Record<string,
 /** The admin page of the Race behind a public link (its Registrations). */
 export const adminRacePath = (raceLink: string) => `/admin/races/${raceLink.slice("/r/".length)}`;
 
+/** The Race's A4 poster with its QR code. */
+export const posterPath = (raceLink: string) => `${adminRacePath(raceLink)}/poster`;
+
 /** The admin page of a Registration's delete confirmation; posting to it deletes. */
 export const deletePath = (raceLink: string, number: number) => `${adminRacePath(raceLink)}/registrations/${number}/delete`;
 

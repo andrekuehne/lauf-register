@@ -130,4 +130,15 @@ border:2px solid var(--accent);border-radius:10px;cursor:pointer}
 .race-delete{margin-top:36px;text-align:center}
 .race-delete a{color:var(--danger)}
 .note{padding:12px;background:var(--warn-bg);border-radius:8px}
+.qr-open{display:block;margin:14px auto 0;padding:12px 16px;font:inherit;font-size:.95rem;color:var(--accent);background:none;border:0;text-decoration:underline;cursor:pointer}
+.qr-layer{position:fixed;top:0;right:0;bottom:0;left:0;z-index:10;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#fff;text-align:center}
+.qr-layer-box{max-width:34rem;margin:0 auto;padding:16px 16px 32px}
+.qr-layer-call{margin:8px 0 0;font-size:1.6rem;font-weight:800;line-height:1.2}
+.qr-layer-name{margin:4px 0 8px;color:var(--muted)}
+.qr-layer .qr{display:block;width:100%;max-width:62vh;height:auto;margin:0 auto}
+.qr-layer-link{margin:4px 0 0;color:var(--muted);font-size:.95rem;word-break:break-all}
+.qr-layer .btn{margin-top:14px}
+.race-qr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:12px 0 0}
+.race-qr a{display:inline-block;padding:12px 0;color:var(--accent)}
+.race-qr .qr-open{display:inline-block;margin:0;padding:12px 0;font-size:1rem}
 `;
