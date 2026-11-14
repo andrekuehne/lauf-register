@@ -11,13 +11,14 @@ beforeEach(async () => {
 let attempts = 0;
 const freshAttemptId = () => `attempt-${++attempts}-${crypto.randomUUID()}`;
 
-const anna = { title: "frau", firstName: "Anna", lastName: "Muster", birthYear: 1985, club: "LG Nord" };
-const ben = { title: "none", firstName: "Ben", lastName: "Beispiel", birthYear: 1990, club: null };
+const anna = { gender: "F", title: "dr", firstName: "Anna", lastName: "Muster", birthYear: 1985, club: "LG Nord" };
+const clara = { gender: "F", title: "none", firstName: "Clara", lastName: "Muster", birthYear: 2015, club: "LG Nord" };
+const ben = { gender: "M", title: "none", firstName: "Ben", lastName: "Beispiel", birthYear: 1990, club: null };
+const emil = { gender: "M", title: "none", firstName: "Emil", lastName: "Beispiel", birthYear: 2017, club: null };
 
 function registration(overrides: Record<string, unknown> = {}) {
   return {
     attemptId: freshAttemptId(),
-    division: "women",
     duration: 60,
     consent: true,
     participants: [anna],
@@ -33,6 +34,11 @@ function submit(raceLink: string, body: unknown) {
   });
 }
 
+async function numberOf(res: Response): Promise<number> {
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { number: number }).number;
+}
+
 describe("submitting a Registration", () => {
   it("stores a single Participant and returns Registration number 1", async () => {
     const race = await newRace("Stundenlauf");
@@ -43,22 +49,23 @@ describe("submitting a Registration", () => {
     expect(await res.json()).toEqual({ number: 1 });
   });
 
-  it("stores same-gender and mixed Pairs, numbering one Race sequentially", async () => {
+  it("numbers singles from 1 and Pairs from 1001, each on its own", async () => {
     const race = await newRace("Stundenlauf");
-    const clara = { ...anna, firstName: "Clara" };
-
     const numbers = [];
-    for (const body of [
-      registration(),
-      registration({ division: "womens_pair", duration: 30, participants: [anna, clara] }),
-      registration({ division: "mixed_pair", participants: [anna, ben] }),
+
+    for (const participants of [
+      [anna],
+      [anna, clara],
+      [ben],
+      [ben, emil],
+      [anna, ben],
+      [emil, clara],
+      [emil],
     ]) {
-      const res = await submit(race, body);
-      expect(res.status).toBe(200);
-      numbers.push(((await res.json()) as { number: number }).number);
+      numbers.push(await numberOf(await submit(race, registration({ duration: 30, participants }))));
     }
 
-    expect(numbers).toEqual([1, 2, 3]);
+    expect(numbers).toEqual([1, 1001, 2, 1002, 1003, 1004, 3]);
   });
 
   it("numbers each Race on its own", async () => {
@@ -66,17 +73,17 @@ describe("submitting a Registration", () => {
     const second = await newRace("Lauf B");
 
     await submit(first, registration());
-    await submit(first, registration());
-    const res = await submit(second, registration());
+    await submit(first, registration({ participants: [anna, ben] }));
 
-    expect(await res.json()).toEqual({ number: 1 });
+    expect(await numberOf(await submit(second, registration()))).toBe(1);
+    expect(await numberOf(await submit(second, registration({ participants: [ben, anna] })))).toBe(1001);
   });
 
   it("counts stored Registrations on the admin Race list", async () => {
     const busy = await newRace("Voller Lauf", "2026-12-10");
     const quiet = await newRace("Ruhiger Lauf", "2026-12-09");
     await submit(busy, registration());
-    await submit(busy, registration({ division: "mixed_pair", participants: [anna, ben] }));
+    await submit(busy, registration({ participants: [ben, anna] }));
     await submit(quiet, registration());
 
     const html = await (await asAdmin("/admin")).text();
@@ -102,12 +109,12 @@ describe("repeating a submit", () => {
 
   it("gives a double tap (two submits at once) one Registration", async () => {
     const race = await newRace("Stundenlauf");
-    const body = registration();
+    const body = registration({ participants: [anna, ben] });
 
     const responses = await Promise.all([submit(race, body), submit(race, body)]);
 
     expect(responses.map((r) => r.status)).toEqual([200, 200]);
-    expect(await Promise.all(responses.map((r) => r.json()))).toEqual([{ number: 1 }, { number: 1 }]);
+    expect(await Promise.all(responses.map((r) => r.json()))).toEqual([{ number: 1001 }, { number: 1001 }]);
     expect(await (await asAdmin("/admin")).text()).toContain("1 Anmeldung<");
   });
 
@@ -133,14 +140,18 @@ describe("validating a submit", () => {
     ["not an object", "Anna", ""],
     ["no attempt ID", registration({ attemptId: undefined }), "attemptId"],
     ["a malformed attempt ID", registration({ attemptId: "<script>" }), "attemptId"],
-    ["an unknown Division", registration({ division: "kids" }), "division"],
     ["an unknown Duration", registration({ duration: 45 }), "duration"],
     ["consent not ticked", registration({ consent: false }), "consent"],
     ["no Participants", registration({ participants: undefined }), "participants"],
-    ["two Participants for a single Division", registration({ participants: [anna, ben] }), "participants"],
-    ["one Participant for a Pair", registration({ division: "mixed_pair", participants: [anna] }), "participants"],
+    ["an empty Participant list", registration({ participants: [] }), "participants"],
+    ["three Participants", registration({ participants: [anna, ben, clara] }), "participants"],
     ["a Participant that isn't an object", registration({ participants: ["Anna"] }), "participants.0"],
+    ["no Gender", withAnna({ gender: undefined }), "participants.0.gender"],
+    ["an unknown Gender", withAnna({ gender: "X" }), "participants.0.gender"],
+    ["Gender in lowercase export coding", withAnna({ gender: "w" }), "participants.0.gender"],
     ["an unknown Title", withAnna({ title: "prof" }), "participants.0.title"],
+    ["the removed Title Frau", withAnna({ title: "frau" }), "participants.0.title"],
+    ["the removed Title Kids", withAnna({ title: "kids" }), "participants.0.title"],
     ["no Title", withAnna({ title: undefined }), "participants.0.title"],
     ["an empty first name", withAnna({ firstName: "  " }), "participants.0.firstName"],
     ["a missing last name", withAnna({ lastName: undefined }), "participants.0.lastName"],
@@ -154,7 +165,7 @@ describe("validating a submit", () => {
     ["an overlong club", withAnna({ club: long }), "participants.0.club"],
     [
       "a bad second Participant",
-      registration({ division: "mixed_pair", participants: [anna, { ...ben, firstName: "" }] }),
+      registration({ participants: [anna, { ...ben, firstName: "" }] }),
       "participants.1.firstName",
     ],
   ];
@@ -184,10 +195,9 @@ describe("validating a submit", () => {
     const res = await submit(
       race,
       registration({
-        division: "mens_pair",
         participants: [
           { ...ben, birthYear: 2026, club: "   " },
-          { ...ben, title: "kids", birthYear: 1800, club: undefined },
+          { ...ben, birthYear: 1800, club: undefined },
         ],
       }),
     );

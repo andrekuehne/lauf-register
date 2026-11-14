@@ -1,29 +1,25 @@
 // The registration flow in the browser. Bundled by scripts/build-client.mjs for
 // ~iOS 12 / Android 8 browsers and inlined into the page.
-// Steps live in the URL hash (#division, #duration, …) so the phone's back
+// Steps live in the URL hash (#duration, #single-or-pair, …) so the phone's back
 // button returns to the previous screen; each history entry remembers which
 // step it was opened from, so the in-app back button never leaves the page. In-progress data sits in sessionStorage.
 
 import {
-  defaultTitle,
-  enteredGenders,
+  DIVISIONS_FOR,
   isDivision,
   isDuration,
+  isGender,
+  isSingleOrPair,
   isTitle,
+  singleOrPairOf,
   slotGenders,
   type Division,
   type Duration,
   type Gender,
+  type SingleOrPair,
   type Title,
 } from "../domain/categories";
-import {
-  ageInRaceYear,
-  isImplausibleBirthYear,
-  kidsTitleMismatch,
-  birthYearError,
-  parseBirthYear,
-  titleContradictsSlot,
-} from "../domain/participant-checks";
+import { ageInRaceYear, birthYearError, isImplausibleBirthYear, parseBirthYear } from "../domain/participant-checks";
 import { FLOW_CONFIG_ID, type FlowConfig } from "../registration/flow-config";
 import { fill } from "../shared/fill";
 import { divisionIconSvg } from "../ui/icon-svgs";
@@ -36,17 +32,19 @@ type Participant = {
   club: string;
   /** The second slot's club follows the first slot's until edited by hand. */
   clubEdited: boolean;
-  /** Until picked by hand, the Title follows the slot (see defaultTitle). */
-  titleChosen: boolean;
 };
 
 const TEXT_FIELDS = ["firstName", "lastName", "birthYear"] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
-type FieldMessages = Partial<Record<TextField, string>>;
+type FieldMessages = Partial<Record<TextField | "gender", string>>;
 
 type State = {
-  division?: Division;
   duration?: Duration;
+  singleOrPair?: SingleOrPair;
+  /** Kept when single/pair changes, so details can move over; only counts while it fits singleOrPair. */
+  division?: Division;
+  /** Mixed pair: the first person's chosen Gender; the second person's is the opposite. */
+  mixedFirstGender?: Gender;
   participants: [Participant, Participant];
   consent: boolean;
   /** Sent with every submit of this Registration; a repeat returns the same Registration. */
@@ -55,11 +53,20 @@ type State = {
 };
 
 /** "details" is the first (or only) person, "details-2" the second person of a Pair. */
-const STEPS = ["division", "duration", "details", "details-2", "check", "done"] as const;
+const STEPS = ["duration", "single-or-pair", "division", "details", "details-2", "check", "done"] as const;
 type Step = (typeof STEPS)[number];
-/** "Step n of 4": both persons of a Pair share step 3, "done" isn't counted. */
-const STEP_NUMBERS: Record<Step, number> = { division: 1, duration: 2, details: 3, "details-2": 3, check: 4, done: 4 };
-const COUNTED_STEPS = 4;
+/** "Step n of 5": both persons of a Pair share step 4, "done" isn't counted. */
+const STEP_NUMBERS: Record<Step, number> = {
+  duration: 1,
+  "single-or-pair": 2,
+  division: 3,
+  details: 4,
+  "details-2": 4,
+  check: 5,
+  done: 5,
+};
+const COUNTED_STEPS = 5;
+const FIRST_STEP: Step = "duration";
 const SUBMIT_TIMEOUT_MS = 15000;
 
 const config: FlowConfig = JSON.parse(byId(FLOW_CONFIG_ID).textContent || "{}");
@@ -96,7 +103,7 @@ function newAttemptId(): string {
 }
 
 function emptyParticipant(): Participant {
-  return { title: "none", firstName: "", lastName: "", birthYear: "", club: "", clubEdited: false, titleChosen: false };
+  return { title: "none", firstName: "", lastName: "", birthYear: "", club: "", clubEdited: false };
 }
 
 function freshState(): State {
@@ -119,11 +126,12 @@ function load(): State | null {
     if (!raw) return null;
     const saved = JSON.parse(raw) as State;
     if (!saved || !saved.participants || saved.participants.length !== 2 || !saved.attemptId) return null;
-    if (saved.division !== undefined && !isDivision(saved.division)) return null;
     if (saved.duration !== undefined && !isDuration(saved.duration)) return null;
+    if (saved.singleOrPair !== undefined && !isSingleOrPair(saved.singleOrPair)) return null;
+    if (saved.division !== undefined && !isDivision(saved.division)) return null;
+    if (saved.mixedFirstGender !== undefined && !isGender(saved.mixedFirstGender)) return null;
     saved.participants.forEach((p) => {
       if (!isTitle(p.title)) p.title = "none";
-      if (typeof p.titleChosen !== "boolean") p.titleChosen = p.title !== "none";
     });
     return saved;
   } catch (e) {
@@ -133,23 +141,15 @@ function load(): State | null {
 
 // ---------- derived values ----------
 
-/** Fills in the Title of every slot whose Participant hasn't picked one by hand. */
-function applyDefaultTitles() {
-  const division = state.division;
-  if (!division) return;
-  slotGenders(division).forEach((_, slot) => {
-    const p = state.participants[slot]!;
-    if (!p.titleChosen) p.title = defaultTitle(division, slot, state.participants[0].title);
-  });
+/** The Division, once it has been chosen for the current single/pair choice. */
+function chosenDivision(): Division | undefined {
+  return state.division && state.singleOrPair === singleOrPairOf(state.division) ? state.division : undefined;
 }
 
-/** Gender per entered person; a Mixed pair may be entered in either order. */
-function genders(): Gender[] {
-  return state.division ? enteredGenders(state.division, titles()) : ["F"];
-}
-
-function titles(): Title[] {
-  return state.participants.map((p) => p.title);
+/** Gender per slot; in a Mixed pair unknown until the first person has chosen. */
+function genders(): (Gender | undefined)[] {
+  const chosen = chosenDivision();
+  return chosen ? slotGenders(chosen, state.mixedFirstGender) : [undefined];
 }
 
 function activeParticipants(): Participant[] {
@@ -160,19 +160,22 @@ function isPair(): boolean {
   return genders().length === 2;
 }
 
-/**
- * "Erste Person", or on the Check screen of a Mixed pair "Erste Person · Mann"
- * (who is who as derived from the Titles); empty for a single Participant.
- */
-function slotLabel(slot: number, withGender = false): string {
-  if (!isPair()) return "";
-  const person = slot === 0 ? t.pairFirst : t.pairSecond;
-  if (!withGender || state.division !== "mixed_pair") return person;
-  return `${person} · ${genders()[slot] === "F" ? t.slotWoman : t.slotMan}`;
+function isMixed(): boolean {
+  return chosenDivision() === "mixed_pair";
 }
 
-function personErrors(p: Participant): FieldMessages {
+/** "Erste Person" for a Pair; with the Gender (Check screen) "Erste Person · Frau", or just "Frau" for a single. */
+function slotLabel(slot: number, withGender = false): string {
+  const person = isPair() ? (slot === 0 ? t.pairFirst : t.pairSecond) : "";
+  const gender = genders()[slot];
+  if (!withGender || !gender) return person;
+  return person ? `${person} · ${t.genders[gender]}` : t.genders[gender];
+}
+
+function personErrors(slot: number): FieldMessages {
+  const p = state.participants[slot]!;
   const errors: FieldMessages = {};
+  if (slot === 0 && isMixed() && !state.mixedFirstGender) errors.gender = t.genderRequired;
   if (!p.firstName.trim()) errors.firstName = t.required;
   if (!p.lastName.trim()) errors.lastName = t.required;
   const yearError = birthYearError(p.birthYear, config.raceYear);
@@ -184,37 +187,22 @@ function personErrors(p: Participant): FieldMessages {
 }
 
 function participantComplete(slot: number): boolean {
-  return Object.keys(personErrors(state.participants[slot]!)).length === 0;
+  return Object.keys(personErrors(slot)).length === 0;
 }
 
-/** Gentle, non-blocking hints for one person. */
-function personHints(p: Participant, slot: number): { title?: string; birthYear?: string } {
-  const hints: { title?: string; birthYear?: string } = {};
+/** Gentle, non-blocking "please check" for an unlikely birth year. */
+function birthYearHint(p: Participant): string | undefined {
   const year = parseBirthYear(p.birthYear, config.raceYear);
-  const titleHints: string[] = [];
-  if (state.division === "mixed_pair") {
-    // Either order is fine; only two Frau or two Herr can't be a Mixed pair. Shown on both.
-    const first = state.participants[0].title;
-    if (first === state.participants[1].title && (first === "frau" || first === "herr")) titleHints.push(t.mixedTitleCheck);
-  } else if (titleContradictsSlot(p.title, genders()[slot] || "F")) {
-    titleHints.push(fill(t.titleCheck, { title: t.titles[p.title] }));
-  }
-  if (year !== null) {
-    const age = ageInRaceYear(year, config.raceYear);
-    const kids = kidsTitleMismatch(p.title, age);
-    if (kids === "kids-but-adult") titleHints.push(t.kidsButAdult);
-    if (kids === "child-without-kids") titleHints.push(t.childWithoutKids);
-    if (isImplausibleBirthYear(year, config.raceYear)) hints.birthYear = fill(t.birthYearCheck, { age });
-  }
-  if (titleHints.length) hints.title = titleHints.join(" ");
-  return hints;
+  if (year === null || !isImplausibleBirthYear(year, config.raceYear)) return undefined;
+  return fill(t.birthYearCheck, { age: ageInRaceYear(year, config.raceYear) });
 }
 
 /** The furthest step the current data allows. */
 function furthestStep(): Step {
   if (state.result) return "done";
-  if (!state.division) return "division";
   if (!state.duration) return "duration";
+  if (!state.singleOrPair) return "single-or-pair";
+  if (!chosenDivision()) return "division";
   if (!participantComplete(0)) return "details";
   if (isPair() && !participantComplete(1)) return "details-2";
   return "check";
@@ -230,9 +218,11 @@ function shortName(p: Participant): string {
   return `${p.firstName.trim()}${last ? ` ${last.charAt(0)}.` : ""}`;
 }
 
+/** "Mixed-Paar · Halbstundenlauf" */
 function categoryName(): string {
-  if (!state.division || !state.duration) return "";
-  return `${t.divisions[state.division].name} · ${t.durations[state.duration].name}`;
+  const chosen = chosenDivision();
+  if (!chosen || !state.duration) return "";
+  return `${t.divisions[chosen].category} · ${t.durations[state.duration].name}`;
 }
 
 // ---------- navigation ----------
@@ -267,7 +257,7 @@ function previousStep(step: Step): Step {
 }
 
 function goBack() {
-  const previous = previousStep(currentStep || "division");
+  const previous = previousStep(currentStep || FIRST_STEP);
   const entry = historyEntry();
   if (entry && entry.from === previous) history.back();
   else go(previous, true);
@@ -291,16 +281,18 @@ function render(step: Step) {
   const firstRender = currentStep === undefined;
   currentStep = step;
 
-  byId("flow").className = state.division ? `div-${state.division}` : "";
+  const chosen = chosenDivision();
+  byId("flow").className = chosen ? `div-${chosen}` : "";
   all("[data-step]").forEach((section) => show(section, section.getAttribute("data-step") === step));
   renderBar(step);
   updateLanguageLinks();
   // The Race name heads the first step only; later steps keep the screen for the form.
-  show(document.querySelector("header.top"), step === "division");
-  show(byId("foot-lang"), step !== "division");
+  show(document.querySelector("header.top"), step === FIRST_STEP);
+  show(byId("foot-lang"), step !== FIRST_STEP);
 
-  if (step === "division") renderChoices("[data-division]", "data-division", state.division);
   if (step === "duration") renderChoices("[data-duration]", "data-duration", state.duration && String(state.duration));
+  if (step === "single-or-pair") renderChoices("[data-single-or-pair]", "data-single-or-pair", state.singleOrPair);
+  if (step === "division") renderDivisionChoices();
   if (step === "details") renderDetails(0);
   if (step === "details-2") renderDetails(1);
   if (step === "check") renderCheck();
@@ -317,10 +309,12 @@ function renderBar(step: Step) {
   const bar = byId("bar-sel");
   bar.innerHTML = "";
   const parts: [string, Step][] = [];
-  if (state.division) parts.push([t.divisions[state.division].name, "division"]);
-  if (state.duration) parts.push([t.durations[state.duration].short, "duration"]);
+  if (state.duration) parts.push([t.durations[state.duration].name, "duration"]);
+  if (state.singleOrPair) parts.push([t.singleOrPair[state.singleOrPair].name, "single-or-pair"]);
+  const chosen = chosenDivision();
+  if (chosen) parts.push([t.divisions[chosen].name, "division"]);
   const names = activeParticipants().map(shortName).filter((n) => n.trim());
-  if (names.length) parts.push([names.join(" & "), "details"]);
+  if (chosen && names.length) parts.push([names.join(" & "), "details"]);
   parts.forEach((part, i) => {
     const label = part[0];
     const target = part[1];
@@ -353,6 +347,15 @@ function renderChoices(selector: string, attribute: string, selected: string | u
   });
 }
 
+/** Only the Divisions for the chosen single/pair are offered. */
+function renderDivisionChoices() {
+  const offered = state.singleOrPair ? DIVISIONS_FOR[state.singleOrPair] : [];
+  all("[data-division]").forEach((button) => {
+    show(button, offered.indexOf(button.getAttribute("data-division") as Division) >= 0);
+  });
+  renderChoices("[data-division]", "data-division", chosenDivision());
+}
+
 function personBox(slot: number): HTMLElement {
   return document.querySelector(`[data-person="${slot}"]`) as HTMLElement;
 }
@@ -371,6 +374,7 @@ function renderDetails(slot: number) {
   show(note, isPair());
   const box = personBox(slot);
   const p = state.participants[slot]!;
+  renderGenderField(slot);
   all<HTMLInputElement>('[data-field="title"]', box).forEach((radio) => {
     radio.checked = radio.value === p.title;
   });
@@ -378,25 +382,39 @@ function renderDetails(slot: number) {
   field(slot, "lastName").value = p.lastName;
   field(slot, "birthYear").value = p.birthYear;
   field(slot, "club").value = p.club;
-  renderHints(slot);
+  renderBirthYearHint(slot);
 }
 
-function renderHints(slot: number) {
-  const hints = personHints(state.participants[slot]!, slot);
+/** Mixed pair only: the first person picks, the second shows the opposite. */
+function renderGenderField(slot: number) {
   const box = personBox(slot);
-  (["title", "birthYear"] as const).forEach((name) => {
-    const hint = box.querySelector(`[data-hint="${name}"]`) as HTMLElement;
-    hint.textContent = hints[name] || "";
-    show(hint, !!hints[name]);
-  });
+  show(box.querySelector("[data-gender-field]"), isMixed());
+  if (slot === 0) {
+    all<HTMLInputElement>('[data-field="gender"]', box).forEach((radio) => {
+      radio.checked = radio.value === state.mixedFirstGender;
+    });
+  } else {
+    const gender = genders()[1];
+    (box.querySelector("[data-fixed-gender]") as HTMLElement).textContent = gender ? t.genders[gender] : "";
+  }
+}
+
+function renderBirthYearHint(slot: number) {
+  const message = birthYearHint(state.participants[slot]!);
+  const hint = personBox(slot).querySelector('[data-hint="birthYear"]') as HTMLElement;
+  hint.textContent = message || "";
+  show(hint, !!message);
 }
 
 function setError(slot: number, name: string, message: string | undefined) {
   const box = personBox(slot);
-  const error = box.querySelector(`[data-error="${name}"]`) as HTMLElement;
+  const error = box.querySelector(`[data-error="${name}"]`) as HTMLElement | null;
+  if (!error) return;
   error.textContent = message || "";
   show(error, !!message);
-  const input = field(slot, name);
+  // The second person of a Mixed pair has no Gender input, only the fixed text.
+  const input = field(slot, name) as HTMLInputElement | null;
+  if (!input) return;
   if (message) input.setAttribute("aria-invalid", "true");
   else input.removeAttribute("aria-invalid");
 }
@@ -407,17 +425,15 @@ function renderCheck() {
   summary.appendChild(el("p", "cat", categoryName()));
   activeParticipants().forEach((p, slot) => {
     const row = el("div", "sum-person");
-    if (isPair()) row.appendChild(el("span", "", slotLabel(slot, true)));
+    row.appendChild(el("span", "", slotLabel(slot, true)));
     row.appendChild(el("b", "", displayName(p)));
     const year = parseBirthYear(p.birthYear, config.raceYear);
     if (year !== null) {
       row.appendChild(el("span", "", `${year} · ${fill(t.age, { age: ageInRaceYear(year, config.raceYear) })}`));
     }
     row.appendChild(el("span", "", p.club.trim() || t.noClub));
-    const hints = personHints(p, slot);
-    [hints.title, hints.birthYear].forEach((hint) => {
-      if (hint) row.appendChild(el("p", "hint", hint));
-    });
+    const hint = birthYearHint(p);
+    if (hint) row.appendChild(el("p", "hint", hint));
     summary.appendChild(row);
   });
   (byId("consent") as HTMLInputElement).checked = state.consent;
@@ -426,11 +442,12 @@ function renderCheck() {
 }
 
 function renderDone() {
-  if (!state.result || !state.division) return;
-  byId("done-icon").innerHTML = divisionIconSvg(state.division);
+  const chosen = chosenDivision();
+  if (!state.result || !chosen) return;
+  byId("done-icon").innerHTML = divisionIconSvg(chosen);
   byId("done-cat").textContent = categoryName();
   byId("done-names").textContent = activeParticipants().map(displayName).join(" & ");
-  byId("done-number").textContent = `#${String(state.result.number).padStart(3, "0")}`;
+  byId("done-number").textContent = String(state.result.number);
 }
 
 // ---------- submit ----------
@@ -452,12 +469,13 @@ async function submit() {
   }
   show(byId("rejected"), false);
   setSending(true);
+  const slotGender = genders();
   const payload = {
     attemptId: state.attemptId,
-    division: state.division,
     duration: state.duration,
     consent: true,
-    participants: activeParticipants().map((p) => ({
+    participants: activeParticipants().map((p, slot) => ({
+      gender: slotGender[slot],
       title: p.title,
       firstName: p.firstName.trim(),
       lastName: p.lastName.trim(),
@@ -496,16 +514,24 @@ async function submit() {
 
 /**
  * When the Division changes, entered details move to the slot of matching
- * gender (a man's details never land in a woman's slot); the rest is dropped.
- * A Mixed pair keeps its entered order; the Titles tell who is who.
+ * Gender (a man's details never land in a woman's slot); the rest is dropped.
+ * Where a Gender isn't known (a Mixed pair before or after the first person
+ * picks it), details stay in their slot. Entering a Mixed pair always asks for
+ * the first person's Gender again: nothing is preselected there.
  */
 function changeDivision(next: Division) {
-  if (state.division && state.division !== next) {
-    const oldGenders = genders();
+  const previous = state.division;
+  if (previous && previous !== next) {
+    const oldGenders = slotGenders(previous, state.mixedFirstGender);
     const old = state.participants.slice(0, oldGenders.length);
+    if (next === "mixed_pair") state.mixedFirstGender = undefined;
     const used = old.map(() => false);
-    const moved = slotGenders(next).map((gender, slot) => {
-      const index = old.findIndex((_, i) => !used[i] && oldGenders[i] === gender);
+    const moved = slotGenders(next, state.mixedFirstGender).map((gender, slot) => {
+      const index = old.findIndex((_, i) => {
+        if (used[i]) return false;
+        const oldGender = oldGenders[i];
+        return gender && oldGender ? oldGender === gender : i === slot;
+      });
       if (index < 0) return emptyParticipant();
       used[index] = true;
       const p = old[index]!;
@@ -516,22 +542,12 @@ function changeDivision(next: Division) {
     state.participants = [moved[0] || emptyParticipant(), moved[1] || emptyParticipant()];
   }
   state.division = next;
-  applyDefaultTitles();
 }
 
 function afterChoice() {
   save();
   go(furthestStep());
 }
-
-all("[data-division]").forEach((button) => {
-  button.onclick = () => {
-    const value = button.getAttribute("data-division");
-    if (!isDivision(value)) return;
-    changeDivision(value);
-    afterChoice();
-  };
-});
 
 all("[data-duration]").forEach((button) => {
   button.onclick = () => {
@@ -542,8 +558,34 @@ all("[data-duration]").forEach((button) => {
   };
 });
 
+all("[data-single-or-pair]").forEach((button) => {
+  button.onclick = () => {
+    const value = button.getAttribute("data-single-or-pair");
+    if (!isSingleOrPair(value)) return;
+    state.singleOrPair = value;
+    afterChoice();
+  };
+});
+
+all("[data-division]").forEach((button) => {
+  button.onclick = () => {
+    const value = button.getAttribute("data-division");
+    if (!isDivision(value)) return;
+    changeDivision(value);
+    afterChoice();
+  };
+});
+
 all("[data-back]").forEach((button) => {
   button.onclick = goBack;
+});
+
+all<HTMLInputElement>('[data-field="gender"]', personBox(0)).forEach((radio) => {
+  radio.onchange = () => {
+    if (radio.checked && isGender(radio.value)) state.mixedFirstGender = radio.value;
+    setError(0, "gender", undefined);
+    save();
+  };
 });
 
 [0, 1].forEach((slot) => {
@@ -551,13 +593,8 @@ all("[data-back]").forEach((button) => {
   const p = () => state.participants[slot]!;
   all<HTMLInputElement>('[data-field="title"]', box).forEach((radio) => {
     radio.onchange = () => {
-      if (radio.checked && isTitle(radio.value)) {
-        p().title = radio.value;
-        p().titleChosen = true;
-        applyDefaultTitles();
-      }
+      if (radio.checked && isTitle(radio.value)) p().title = radio.value;
       save();
-      renderHints(slot);
     };
   });
   TEXT_FIELDS.forEach((name) => {
@@ -566,7 +603,7 @@ all("[data-back]").forEach((button) => {
       p()[name] = input.value;
       setError(slot, name, undefined);
       save();
-      if (name === "birthYear") renderHints(slot);
+      if (name === "birthYear") renderBirthYearHint(slot);
     };
   });
   const club = field(slot, "club");
@@ -585,9 +622,9 @@ all<HTMLFormElement>(".details-form").forEach((form) => {
   const slot = Number(form.getAttribute("data-slot"));
   form.onsubmit = (event) => {
     event.preventDefault();
-    const errors = personErrors(state.participants[slot]!);
+    const errors = personErrors(slot);
     let firstInvalid: HTMLInputElement | undefined;
-    TEXT_FIELDS.forEach((name) => {
+    (["gender", ...TEXT_FIELDS] as const).forEach((name) => {
       setError(slot, name, errors[name]);
       if (errors[name] && !firstInvalid) firstInvalid = field(slot, name);
     });
@@ -615,7 +652,7 @@ byId("another").onclick = () => {
   save();
   show(byId("offline"), false);
   setSending(false);
-  go("division", true);
+  go(FIRST_STEP, true);
 };
 
 // popstate covers back/forward (also between identical hashes); hashchange covers hand-edited URLs.

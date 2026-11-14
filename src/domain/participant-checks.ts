@@ -1,12 +1,8 @@
 // Rules for a Participant's details. Shared by the browser (inline feedback)
 // and the Worker (authoritative validation, src/registration/registration-input.ts).
 
-import type { Gender, Title } from "./categories";
-
 export const OLDEST_PLAUSIBLE_BIRTH_YEAR = 1920;
 export const YOUNGEST_PLAUSIBLE_AGE = 3;
-/** Participants younger than this are expected to have the Title "kids". */
-export const KIDS_AGE_LIMIT = 12;
 
 /** Longest accepted name or club; the form fields stop typing there. */
 export const MAX_TEXT_LENGTH = 100;
@@ -40,19 +36,4 @@ export function isImplausibleBirthYear(birthYear: number, raceYear: number): boo
     birthYear < OLDEST_PLAUSIBLE_BIRTH_YEAR ||
     ageInRaceYear(birthYear, raceYear) < YOUNGEST_PLAUSIBLE_AGE
   );
-}
-
-/** "Frau" in a man's slot or "Herr" in a woman's slot: worth a gentle "please check", never a block. */
-export function titleContradictsSlot(title: Title, slotGender: Gender): boolean {
-  return (title === "frau" && slotGender === "M") || (title === "herr" && slotGender === "F");
-}
-
-/**
- * The Title "kids" and the age disagree: "kids" for someone 12 or older, or a
- * child under 12 without it. Worth a gentle "please check", never a block.
- */
-export function kidsTitleMismatch(title: Title, age: number): "kids-but-adult" | "child-without-kids" | null {
-  if (title === "kids" && age >= KIDS_AGE_LIMIT) return "kids-but-adult";
-  if (title !== "kids" && age < KIDS_AGE_LIMIT) return "child-without-kids";
-  return null;
 }

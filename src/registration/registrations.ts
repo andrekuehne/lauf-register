@@ -29,29 +29,33 @@ async function findNumberByAttempt(db: D1Database, raceId: number, attemptId: st
     .first<number>("number");
 }
 
+/** Pair numbers start above any realistic count of singles, as on the organizers' lists. */
+const FIRST_PAIR_NUMBER = 1001;
+
 /**
- * One transaction: count the Race's Registration number up, store the
- * Registration with it, then its Participants. If any step fails (e.g. the
- * attempt ID is already stored), nothing is kept, the counter included.
+ * One transaction: count the Race's single or Pair counter up, store the
+ * Registration with the resulting number, then its Participants. If any step
+ * fails (e.g. the attempt ID is already stored), nothing is kept, the counter included.
  */
 async function insertRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<number> {
-  const nextNumber = db
-    .prepare("UPDATE races SET last_registration_number = last_registration_number + 1 WHERE id = ?")
-    .bind(raceId);
+  const isPair = input.participants.length === 2;
+  const counter = isPair ? "last_pair_number" : "last_single_number";
+  const number = isPair ? `${FIRST_PAIR_NUMBER - 1} + last_pair_number` : "last_single_number";
+  const nextNumber = db.prepare(`UPDATE races SET ${counter} = ${counter} + 1 WHERE id = ?`).bind(raceId);
   const registration = db
     .prepare(
-      `INSERT INTO registrations (race_id, number, division, duration, attempt_id)
-       SELECT id, last_registration_number, ?, ?, ? FROM races WHERE id = ?
+      `INSERT INTO registrations (race_id, number, duration, attempt_id)
+       SELECT id, ${number}, ?, ? FROM races WHERE id = ?
        RETURNING number`,
     )
-    .bind(input.division, input.duration, input.attemptId, raceId);
+    .bind(input.duration, input.attemptId, raceId);
   const participants = input.participants.map((p, index) =>
     db
       .prepare(
-        `INSERT INTO participants (registration_id, slot, title, first_name, last_name, birth_year, club)
-         SELECT id, ?, ?, ?, ?, ?, ? FROM registrations WHERE race_id = ? AND attempt_id = ?`,
+        `INSERT INTO participants (registration_id, slot, gender, title, first_name, last_name, birth_year, club)
+         SELECT id, ?, ?, ?, ?, ?, ?, ? FROM registrations WHERE race_id = ? AND attempt_id = ?`,
       )
-      .bind(index + 1, p.title, p.firstName, p.lastName, p.birthYear, p.club, raceId, input.attemptId),
+      .bind(index + 1, p.gender, p.title, p.firstName, p.lastName, p.birthYear, p.club, raceId, input.attemptId),
   );
   const [, inserted] = await db.batch<{ number: number }>([nextNumber, registration, ...participants]);
   return inserted!.results[0]!.number;

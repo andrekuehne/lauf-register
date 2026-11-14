@@ -62,6 +62,7 @@ border:2px solid var(--line);border-radius:10px;-webkit-appearance:none;appearan
 input[type=text]:focus,input[type=date]:focus{outline:3px solid #93c5fd;border-color:var(--accent)}
 input[aria-invalid=true]{border-color:var(--danger)}
 .year{max-width:9rem}
+.fixed-gender{margin:4px 0 0;font-size:1.05rem}.fixed-gender small{color:var(--muted)}
 .pills{display:flex;flex-wrap:wrap;margin:0 -8px -8px 0}
 .pill{position:relative;margin:0 8px 8px 0}
 .pill input{position:absolute;opacity:0;width:1px;height:1px}

@@ -1,10 +1,11 @@
 // The authoritative check of a submitted Registration (the browser shows the
 // same rules inline, see src/domain/participant-checks.ts).
 
-import { enteredGenders, isDivision, isDuration, isTitle, slotGenders, type Division, type Duration, type Title } from "../domain/categories";
+import { isDuration, isGender, isTitle, type Duration, type Gender, type Title } from "../domain/categories";
 import { birthYearError, MAX_TEXT_LENGTH } from "../domain/participant-checks";
 
 export type ParticipantInput = {
+  gender: Gender;
   title: Title;
   firstName: string;
   lastName: string;
@@ -15,9 +16,8 @@ export type ParticipantInput = {
 
 export type RegistrationInput = {
   attemptId: string;
-  division: Division;
   duration: Duration;
-  /** In slot order: one Participant, or two for a Pair. */
+  /** In entered order: one Participant, or two for a Pair (any two Genders, in either order). */
   participants: ParticipantInput[];
 };
 
@@ -45,9 +45,8 @@ export function validateRegistrationInput(body: unknown, raceYear: number): Regi
   const issues: RegistrationIssue[] = [];
   const issue = (path: string, message: string) => issues.push({ path, message });
 
-  const { attemptId, division, duration, consent, participants } = body;
+  const { attemptId, duration, consent, participants } = body;
   if (typeof attemptId !== "string" || !ATTEMPT_ID.test(attemptId)) issue("attemptId", "attempt ID is missing or malformed");
-  if (!isDivision(division)) issue("division", "unknown Division");
   if (!isDuration(duration)) issue("duration", "unknown Duration");
   if (consent !== true) issue("consent", "consent must be ticked");
 
@@ -55,8 +54,8 @@ export function validateRegistrationInput(body: unknown, raceYear: number): Regi
   if (!Array.isArray(participants)) {
     issue("participants", "Participants are missing");
   } else {
-    if (isDivision(division) && participants.length !== slotGenders(division).length) {
-      issue("participants", `${division} needs ${slotGenders(division).length} Participant(s), got ${participants.length}`);
+    if (participants.length < 1 || participants.length > 2) {
+      issue("participants", `expected one Participant or a Pair of two, got ${participants.length}`);
     }
     participants.forEach((p: unknown, index) => {
       const participant = validateParticipant(p, raceYear, (field, message) =>
@@ -67,18 +66,7 @@ export function validateRegistrationInput(body: unknown, raceYear: number): Regi
   }
 
   if (issues.length > 0) return { ok: false, issues };
-  // A Mixed pair may arrive man first; it is stored woman first (slot 1), so
-  // gender can always be derived from Division + slot.
-  const manFirst = enteredGenders(division as Division, checked.map((p) => p.title))[0] === "M";
-  return {
-    ok: true,
-    input: {
-      attemptId: attemptId as string,
-      division: division as Division,
-      duration: duration as Duration,
-      participants: division === "mixed_pair" && manFirst ? [...checked].reverse() : checked,
-    },
-  };
+  return { ok: true, input: { attemptId: attemptId as string, duration: duration as Duration, participants: checked } };
 }
 
 function validateParticipant(
@@ -96,6 +84,7 @@ function validateParticipant(
     ok = false;
   };
 
+  if (!isGender(p.gender)) fail("gender", "Gender must be F or M");
   if (!isTitle(p.title)) fail("title", "unknown Title");
   const firstName = requiredText(p.firstName);
   if (typeof firstName !== "string") fail("firstName", `first name ${firstName.problem}`);
@@ -109,6 +98,7 @@ function validateParticipant(
 
   if (!ok) return null;
   return {
+    gender: p.gender as Gender,
     title: p.title as Title,
     firstName: firstName as string,
     lastName: lastName as string,

@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { raw } from "hono/html";
-import { DIVISIONS, DURATIONS, TITLES } from "../domain/categories";
+import { DIVISIONS, DURATIONS, GENDERS, SINGLE_OR_PAIR, TITLES } from "../domain/categories";
 import { MAX_TEXT_LENGTH } from "../domain/participant-checks";
 import { flowBundle } from "../generated/flow-bundle";
 import { strings, type FlowStrings } from "../i18n";
@@ -31,6 +31,25 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
   const auto = (value: string) => (slot === 0 ? value : "off");
   return (
     <div class="person" data-person={slot}>
+      {/* Mixed pair only: the first person chooses, the second gets the opposite. */}
+      <div class="field" data-gender-field hidden>
+        <span class="label" id={id("gender-label")}>{t.gender}</span>
+        {slot === 0 ? (
+          <div class="pills" role="radiogroup" aria-labelledby={id("gender-label")}>
+            {GENDERS.map((gender) => (
+              <label class="pill">
+                <input type="radio" name={id("gender")} value={gender} data-field="gender" />
+                <span>{t.genders[gender]}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p class="fixed-gender" aria-labelledby={id("gender-label")}>
+            <b data-fixed-gender></b> <small>({t.genderFromFirst})</small>
+          </p>
+        )}
+        <p class="error" data-error="gender" hidden></p>
+      </div>
       <div class="field">
         <span class="label" id={id("title-label")}>{t.title}</span>
         <div class="pills" role="radiogroup" aria-labelledby={id("title-label")}>
@@ -41,7 +60,6 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
             </label>
           ))}
         </div>
-        <p class="hint" data-hint="title" hidden></p>
       </div>
       <div class="row">
       <div class="field">
@@ -71,7 +89,7 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
   );
 }
 
-/** The public registration flow for one Race: Division → Duration → details → Check → Done. */
+/** The public registration flow for one Race: Duration → single or pair → Division → details → Check → Done. */
 export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
   const lang = c.get("lang");
   const t = strings(lang).flow;
@@ -104,19 +122,6 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
           </div>
         </div>
 
-        <section data-step="division" hidden>
-          <h2 tabindex={-1}>{t.divisionHeading}</h2>
-          {DIVISIONS.map((division) => (
-            <button type="button" class={`choice div-${division}`} data-division={division} aria-pressed="false">
-              <Icon svg={divisionIconSvg(division)} />
-              <span>
-                <b>{t.divisions[division].name}</b>
-                <small>{t.divisions[division].detail}</small>
-              </span>
-            </button>
-          ))}
-        </section>
-
         <section data-step="duration" hidden>
           <h2 tabindex={-1}>{t.durationHeading}</h2>
           {DURATIONS.map((duration) => (
@@ -125,6 +130,34 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
               <span>
                 <b>{t.durations[duration].name}</b>
                 <small>{t.durations[duration].detail}</small>
+              </span>
+            </button>
+          ))}
+        </section>
+
+        <section data-step="single-or-pair" hidden>
+          <h2 tabindex={-1}>{t.singleOrPairHeading}</h2>
+          {SINGLE_OR_PAIR.map((choice) => (
+            <button type="button" class="choice" data-single-or-pair={choice} aria-pressed="false">
+              <Icon svg={ICONS[choice]} />
+              <span>
+                <b>{t.singleOrPair[choice].name}</b>
+                <small>{t.singleOrPair[choice].detail}</small>
+              </span>
+            </button>
+          ))}
+          <button type="button" class="back" data-back>{t.back}</button>
+        </section>
+
+        {/* All five are rendered; the flow shows the ones for single or pair. */}
+        <section data-step="division" hidden>
+          <h2 tabindex={-1}>{t.divisionHeading}</h2>
+          {DIVISIONS.map((division) => (
+            <button type="button" class={`choice div-${division}`} data-division={division} aria-pressed="false" hidden>
+              <Icon svg={divisionIconSvg(division)} />
+              <span>
+                <b>{t.divisions[division].name}</b>
+                <small>{t.divisions[division].detail}</small>
               </span>
             </button>
           ))}
