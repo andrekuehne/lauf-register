@@ -286,9 +286,6 @@ function render(step: Step) {
   all("[data-step]").forEach((section) => show(section, section.getAttribute("data-step") === step));
   renderBar(step);
   updateLanguageLinks();
-  // The Race name heads the first step only; later steps keep the screen for the form.
-  show(document.querySelector("header.top"), step === FIRST_STEP);
-  show(byId("foot-lang"), step !== FIRST_STEP);
 
   if (step === "duration") renderChoices("[data-duration]", "data-duration", state.duration && String(state.duration));
   if (step === "single-or-pair") renderChoices("[data-single-or-pair]", "data-single-or-pair", state.singleOrPair);
@@ -325,13 +322,16 @@ function renderBar(step: Step) {
     }
     const button = el("button", "", label) as HTMLButtonElement;
     button.type = "button";
+    // After submitting, the selection stays visible but can't be changed any more.
+    button.disabled = step === "done";
     button.onclick = () => go(target);
     bar.appendChild(button);
   });
+  // One line that scrolls sideways (the bar never changes height); keep the newest choice in view.
+  bar.scrollLeft = bar.scrollWidth;
   const n = STEP_NUMBERS[step];
   byId("stepno").textContent = fill(t.stepOf, { n, total: COUNTED_STEPS });
   (document.querySelector("#bar .progress i") as HTMLElement).style.width = `${(n / COUNTED_STEPS) * 100}%`;
-  show(byId("bar"), step !== "done");
 }
 
 /** Keep the current step when switching language (the server keeps the fragment across its redirect). */

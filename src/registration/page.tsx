@@ -6,7 +6,7 @@ import { flowBundle } from "../generated/flow-bundle";
 import { strings, type FlowStrings } from "../i18n";
 import { formatRaceDateLong, raceYear } from "../races/race-dates";
 import type { AppEnv } from "../language";
-import { LanguageSwitch, Layout } from "../layout";
+import { Layout } from "../layout";
 import { divisionIconSvg, ICONS } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
 import { FLOW_CONFIG_ID, type FlowConfig } from "./flow-config";
@@ -205,9 +205,6 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
           <button type="button" class="btn btn-secondary" id="another">{t.another}</button>
         </section>
       </div>
-      <footer class="foot-lang" id="foot-lang" hidden>
-        <LanguageSwitch lang={lang} url={c.req.url} />
-      </footer>
       <script type="application/json" id={FLOW_CONFIG_ID}>{raw(scriptJson(config))}</script>
       <script>{raw(flowBundle)}</script>
     </Layout>,
