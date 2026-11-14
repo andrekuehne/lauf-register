@@ -57,9 +57,9 @@ color:#fff;background:var(--accent);border:0;border-radius:12px;cursor:pointer}
 .field{margin-top:14px}
 .label,label.label{display:block;font-weight:600;margin-bottom:6px}
 .label small{font-weight:400;color:var(--muted)}
-input[type=text]{display:block;width:100%;min-height:52px;padding:10px 12px;font:inherit;color:var(--fg);background:#fff;
+input[type=text],input[type=date]{display:block;width:100%;min-height:52px;padding:10px 12px;font:inherit;color:var(--fg);background:#fff;
 border:2px solid var(--line);border-radius:10px;-webkit-appearance:none;appearance:none}
-input[type=text]:focus{outline:3px solid #93c5fd;border-color:var(--accent)}
+input[type=text]:focus,input[type=date]:focus{outline:3px solid #93c5fd;border-color:var(--accent)}
 input[aria-invalid=true]{border-color:var(--danger)}
 .year{max-width:9rem}
 .pills{display:flex;flex-wrap:wrap;margin:0 -8px -8px 0}
@@ -88,5 +88,12 @@ border:2px solid var(--line);border-radius:24px;background:#fff;font-weight:600;
 .done-names{margin:8px 0 0}
 .done-label{margin:18px 0 0;font-size:.95rem}
 .done-number{font-size:3.6rem;font-weight:800;line-height:1.1;letter-spacing:.02em}
+.card{display:block;margin:0 0 12px;padding:12px 16px 16px;background:var(--card);border-radius:14px}
+.card h2{margin-top:4px}
+.admin-who{font-size:.9rem;margin-top:4px}
+.race-list{list-style:none;margin:0;padding:0}
+.race-list li>*{display:block}
+.race-name{font-size:1.15rem}
+.race-link{margin:6px 0;color:var(--accent);word-break:break-all}
 .note{padding:12px;background:var(--warn-bg);border-radius:8px}
 `;

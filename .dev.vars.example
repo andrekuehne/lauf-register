@@ -1,0 +1,3 @@
+# Copy to .dev.vars for `npm run dev`. Matches access.dev.aud in wrangler.jsonc,
+# so the local Worker accepts the pretend Access sign-in for /admin.
+ACCESS_AUD=local-dev

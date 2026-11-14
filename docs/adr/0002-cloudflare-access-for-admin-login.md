@@ -1,3 +1,5 @@
 # Admin login via Cloudflare Access, not in-app auth
 
 Admins sign in by email through Cloudflare Access, which sits in front of `/admin` with an email allowlist and one-time codes. The app itself has no login code, no user table and no sessions; it trusts the identity header that Access adds. Building login links into the app would have meant an email-sending integration, an Admin table and session handling, all for a small organizing team. Adding or removing an Admin is done in the Cloudflare dashboard, not in the app.
+
+How the Worker trusts it: it does not parse the Access token itself. The Workers runtime verifies the token and hands the result over as `ctx.access` (audience plus `getIdentity()`); the Worker only accepts it when the audience matches our own Access application (`ACCESS_AUD`) and otherwise treats the request as anonymous, so a missing or wrong setup locks the admin area instead of opening it. This sits behind one small identity interface, which is also the only thing tests replace.

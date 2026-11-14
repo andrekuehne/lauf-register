@@ -2,7 +2,8 @@ import type { Context } from "hono";
 import { raw } from "hono/html";
 import { DIVISIONS, DURATIONS, TITLES } from "../domain/categories";
 import { flowBundle } from "../generated/flow-bundle";
-import { strings, type FlowStrings, type Lang } from "../i18n";
+import { strings, type FlowStrings } from "../i18n";
+import { formatRaceDateLong } from "../races/race-dates";
 import type { AppEnv } from "../language";
 import { LanguageSwitch, Layout } from "../layout";
 import { divisionIconSvg, ICONS } from "../ui/icon-svgs";
@@ -16,16 +17,6 @@ export type PublicRace = {
   /** ISO date, YYYY-MM-DD. */
   date: string;
 };
-
-function formatRaceDate(isoDate: string, lang: Lang): string {
-  return new Intl.DateTimeFormat(lang === "de" ? "de-DE" : "en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${isoDate}T00:00:00Z`));
-}
 
 /** JSON that is safe inside a <script> element. */
 function scriptJson(value: unknown): string {
@@ -92,7 +83,7 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
   const heading = (
     <>
       {race.name}
-      <span class="top-sub">{formatRaceDate(race.date, lang)}</span>
+      <span class="top-sub">{formatRaceDateLong(race.date, lang)}</span>
     </>
   );
 

@@ -2,13 +2,13 @@
 // Serves a demo Race and a submit endpoint that stores nothing and makes up
 // Registration numbers, so the registration flow can be tried on phones before
 // the real backend exists.
-// - Deleted completely in #5, together with its mount line in src/index.tsx
+// - Deleted completely in #5, together with its mount line in src/app.tsx
 //   and the `preview:upload` script in package.json.
 // - Never write tests against it.
 
 import { Hono } from "hono";
 import type { AppEnv } from "../language";
-import { raceNotFoundPage, registrationPage, type PublicRace } from "../registration/page";
+import { registrationPage, type PublicRace } from "../registration/page";
 
 const DEMO = { name: "Stundenlauf 09.12.2026", date: "2026-12-09" };
 
@@ -27,14 +27,15 @@ function fakeNumber(attemptId: string): number {
 
 export const fakeBackend = new Hono<AppEnv>();
 
-fakeBackend.get("/r/:token", (c) => {
+// Unknown tokens fall through (next) to the real routes in src/app.tsx.
+fakeBackend.get("/r/:token", (c, next) => {
   const race = demoRaces[c.req.param("token")];
-  return race ? registrationPage(c, race) : raceNotFoundPage(c);
+  return race ? registrationPage(c, race) : next();
 });
 
-fakeBackend.post("/r/:token/registrations", async (c) => {
+fakeBackend.post("/r/:token/registrations", async (c, next) => {
   const race = demoRaces[c.req.param("token")];
-  if (!race) return c.json({ error: "race not found" }, 404);
+  if (!race) return next();
   const body = await c.req.json<{ attemptId?: unknown }>().catch(() => ({ attemptId: undefined }));
   if (typeof body.attemptId !== "string") return c.json({ error: "attemptId missing" }, 400);
   await new Promise((resolve) => setTimeout(resolve, 600)); // feel of a real round trip

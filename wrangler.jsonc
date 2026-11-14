@@ -6,9 +6,21 @@
   "build": {
     // Bundles the browser flow into src/generated/ (see scripts/build-client.mjs).
     "command": "node scripts/build-client.mjs",
-    "watch_dir": ["src/client", "src/domain", "src/shared", "src/ui"]
+    "watch_dir": "src"
   },
   "observability": { "enabled": true },
+  "vars": {
+    // Audience (AUD) tag of the Cloudflare Access application that protects /admin.
+    // Empty means nobody can use the admin area. See README → "Admin sign-in".
+    "ACCESS_AUD": ""
+  },
+  "access": {
+    // Local `npm run dev` only: pretend Access signed this Admin in (matches .dev.vars).
+    "dev": {
+      "aud": "local-dev",
+      "identity": { "email": "admin@example.com" }
+    }
+  },
   "d1_databases": [
     {
       "binding": "DB",

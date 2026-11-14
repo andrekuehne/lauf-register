@@ -2,7 +2,11 @@ import { getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { DEFAULT_LANG, isLang, type Lang } from "./i18n";
 
-export type AppEnv = { Bindings: Env; Variables: { lang: Lang } };
+export type AppEnv = {
+  Bindings: Env;
+  /** adminEmail is set for admin routes only, after the identity check. */
+  Variables: { lang: Lang; adminEmail: string };
+};
 
 const COOKIE = "lang";
 const ONE_YEAR = 60 * 60 * 24 * 365;

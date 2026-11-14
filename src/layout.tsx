@@ -12,6 +12,8 @@ type LayoutProps = {
   title?: string;
   /** Shown top left next to the language switch; defaults to the app name. */
   heading?: Child;
+  /** The admin area is German only and hides the Deutsch / English switch. */
+  languageSwitch?: boolean;
   children: Child;
 };
 
@@ -51,9 +53,11 @@ export function Layout(props: LayoutProps) {
         <body>
           <header class="top">
             <p class="top-title">{props.heading ?? appName}</p>
-            <nav class="lang">
-              <LanguageSwitch lang={props.lang} url={props.url} />
-            </nav>
+            {props.languageSwitch !== false && (
+              <nav class="lang">
+                <LanguageSwitch lang={props.lang} url={props.url} />
+              </nav>
+            )}
           </header>
           <main>{props.children}</main>
         </body>
