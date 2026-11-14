@@ -33,7 +33,6 @@ box-shadow:0 1px 3px rgba(0,0,0,.08);font-size:.95rem;line-height:1.3}
 .stepno{flex-shrink:0;margin-left:8px;font-size:.85rem;color:var(--muted);white-space:nowrap}
 .progress{height:4px;background:#e5e7eb;overflow:hidden}
 .progress i{display:block;height:100%;background:var(--accent);transition:width .2s}
-.pair-note{margin:-6px 0 14px;color:var(--muted)}
 .row{display:flex}
 .row .field{flex:1;min-width:0}
 .row .field+.field{margin-left:10px}
@@ -59,8 +58,14 @@ input[type=text],input[type=date]{display:block;width:100%;min-height:52px;paddi
 border:2px solid var(--line);border-radius:10px;-webkit-appearance:none;appearance:none}
 input[type=text]:focus,input[type=date]:focus{outline:3px solid #93c5fd;border-color:var(--accent)}
 input[aria-invalid=true]{border-color:var(--danger)}
-.year{max-width:9rem}
-.fixed-gender{margin:4px 0 0;font-size:1.05rem}.fixed-gender small{color:var(--muted)}
+.year{max-width:6.5rem}
+.with-side{display:flex;align-items:center;min-height:52px}
+.with-side .side{flex:1;min-width:0;margin-left:12px}
+.with-side .side .error,.with-side .side .hint,.side-note{margin:0;font-size:.85rem;line-height:1.25}
+.with-side .side .hint{padding:6px 8px}
+.side-note{color:var(--muted)}
+.with-side .pills{flex-shrink:0;margin-bottom:-8px}
+.pill input:disabled+span{color:var(--muted);background:#e5e7eb;border-style:dashed;cursor:not-allowed}
 .pills{display:flex;flex-wrap:wrap;margin:0 -8px -8px 0}
 .pill{position:relative;margin:0 8px 8px 0}
 .pill input{position:absolute;opacity:0;width:1px;height:1px}

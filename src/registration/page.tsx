@@ -31,10 +31,10 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
   const auto = (value: string) => (slot === 0 ? value : "off");
   return (
     <div class="person" data-person={slot}>
-      {/* Mixed pair only: the first person chooses, the second gets the opposite. */}
+      {/* Mixed pair only: the first person chooses; for the second, the opposite is set and the other is greyed out. */}
       <div class="field" data-gender-field hidden>
         <span class="label" id={id("gender-label")}>{t.gender}</span>
-        {slot === 0 ? (
+        <div class="with-side">
           <div class="pills" role="radiogroup" aria-labelledby={id("gender-label")}>
             {GENDERS.map((gender) => (
               <label class="pill">
@@ -43,12 +43,12 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
               </label>
             ))}
           </div>
-        ) : (
-          <p class="fixed-gender" aria-labelledby={id("gender-label")}>
-            <b data-fixed-gender></b> <small>({t.genderFromFirst})</small>
-          </p>
-        )}
-        <p class="error" data-error="gender" hidden></p>
+          {/* Messages sit beside the field in reserved space, so nothing below moves. */}
+          <div class="side" aria-live="polite">
+            <p class="error" data-error="gender" hidden></p>
+            {slot === 1 && <p class="side-note" data-gender-note hidden>{t.genderFromFirst}</p>}
+          </div>
+        </div>
       </div>
       <div class="field">
         <span class="label" id={id("title-label")}>{t.title}</span>
@@ -75,9 +75,13 @@ function PersonFields(props: { slot: number; t: FlowStrings }) {
       </div>
       <div class="field">
         <label class="label" for={id("year")}>{t.birthYear}</label>
-        <input type="text" id={id("year")} class="year" data-field="birthYear" inputmode="numeric" pattern="[0-9]*" maxlength={4} autocomplete="off" placeholder="1985" />
-        <p class="error" data-error="birthYear" hidden></p>
-        <p class="hint" data-hint="birthYear" hidden></p>
+        <div class="with-side">
+          <input type="text" id={id("year")} class="year" data-field="birthYear" inputmode="numeric" pattern="[0-9]*" maxlength={4} autocomplete="off" placeholder="1985" />
+          <div class="side" aria-live="polite">
+            <p class="error" data-error="birthYear" hidden></p>
+            <p class="hint" data-hint="birthYear" hidden></p>
+          </div>
+        </div>
       </div>
       <div class="field">
         <label class="label" for={id("club")}>
@@ -167,7 +171,6 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
         {[0, 1].map((slot) => (
           <section data-step={slot === 0 ? "details" : "details-2"} hidden>
             <h2 tabindex={-1} data-details-heading></h2>
-            <p class="pair-note" data-pair-note hidden></p>
             <form class="details-form" data-slot={slot} novalidate>
               <PersonFields slot={slot} t={t} />
               <button type="submit" class="btn">{t.next}</button>

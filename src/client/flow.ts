@@ -382,9 +382,6 @@ function renderDetails(slot: number) {
   (section.querySelector("[data-details-heading]") as HTMLElement).textContent = isPair()
     ? slotLabel(slot)
     : t.detailsHeadingSingle;
-  const note = section.querySelector("[data-pair-note]") as HTMLElement;
-  note.textContent = slot === 0 ? t.pairFirstNote : t.pairSecondNote;
-  show(note, isPair());
   const box = personBox(slot);
   const p = state.participants[slot]!;
   renderGenderField(slot);
@@ -398,18 +395,19 @@ function renderDetails(slot: number) {
   renderBirthYearHint(slot);
 }
 
-/** Mixed pair only: the first person picks, the second shows the opposite. */
+/**
+ * Mixed pair only: the first person picks; the second person sees the same
+ * buttons with the opposite Gender set and the first person's greyed out.
+ */
 function renderGenderField(slot: number) {
   const box = personBox(slot);
   show(box.querySelector("[data-gender-field]"), isMixed());
-  if (slot === 0) {
-    all<HTMLInputElement>('[data-field="gender"]', box).forEach((radio) => {
-      radio.checked = radio.value === state.mixedFirstGender;
-    });
-  } else {
-    const gender = genders()[1];
-    (box.querySelector("[data-fixed-gender]") as HTMLElement).textContent = gender ? t.genders[gender] : "";
-  }
+  const gender = slot === 0 ? state.mixedFirstGender : genders()[1];
+  all<HTMLInputElement>('[data-field="gender"]', box).forEach((radio) => {
+    radio.checked = radio.value === gender;
+    radio.disabled = slot === 1 && radio.value !== gender;
+  });
+  show(box.querySelector("[data-gender-note]"), false);
 }
 
 function renderBirthYearHint(slot: number) {
@@ -591,6 +589,13 @@ all("[data-division]").forEach((button) => {
 
 all("[data-back]").forEach((button) => {
   button.onclick = goBack;
+});
+
+// Tapping the greyed-out Gender of the second person explains why it can't be chosen.
+all<HTMLInputElement>('[data-field="gender"]', personBox(1)).forEach((radio) => {
+  (radio.parentNode as HTMLElement).onclick = () => {
+    if (radio.disabled) show(personBox(1).querySelector("[data-gender-note]"), true);
+  };
 });
 
 all<HTMLInputElement>('[data-field="gender"]', personBox(0)).forEach((radio) => {
