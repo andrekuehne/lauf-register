@@ -40,7 +40,7 @@ npx wrangler login
 | `npm run typecheck` | Type-checks app and tests. |
 | `npm run db:migrate:local` | Applies new migrations to the local D1 database. |
 | `npm run db:migrate:remote` | Applies new migrations to the production D1 database. |
-| `npm run deploy` | Deploys the Worker. Apply remote migrations first if there are new ones. |
+| `npm run deploy` | Deploys the Worker by hand. Apply remote migrations first if there are new ones. Normally CI does both (see below). |
 | `npm run cf-typegen` | Regenerates `worker-configuration.d.ts` after changing `wrangler.jsonc`. |
 
 ## Admin sign-in (Cloudflare Access)
@@ -84,3 +84,30 @@ Tests apply all migrations automatically before each test file. They use their o
 ## Cloudflare account
 
 `database_id` in `wrangler.jsonc` points at the production D1 database in the project's Cloudflare account. Deploying from a different account needs its own database: `npx wrangler d1 create lauf-register`, then put the new id into `wrangler.jsonc`.
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`):
+
+| When | What runs |
+| --- | --- |
+| Every push (any branch) and every pull request | `npm ci`, `npm run typecheck`, `npm test` |
+| A push to `main`, after those checks pass | `npm run db:migrate:remote`, then `npm run deploy` |
+
+A red check means nothing was deployed. Pull requests and other branches are only checked. Runs on `main` queue up and finish in push order, so an older push never deploys over a newer one and a deploy is never cancelled midway. Deploying by hand (`npm run deploy`) still works, but the next push to `main` deploys anyway. The Node version for CI is in `.nvmrc`.
+
+### Secrets (one-time setup)
+
+The deploy job runs in the GitHub environment `production`, which only `main` may use; its two secrets live there, so a workflow pushed on another branch can't read them (GitHub → the repo → Settings → Environments → `production`):
+
+- `CLOUDFLARE_ACCOUNT_ID`: the account ID, shown by `npx wrangler whoami` or in the Cloudflare dashboard (Workers & Pages, right column).
+- `CLOUDFLARE_API_TOKEN`: an API token for this account only:
+  1. Cloudflare dashboard → My Profile → API Tokens → **Create Token** → template **Edit Cloudflare Workers**.
+  2. Add a permission: **Account → D1 → Edit** (for the migrations).
+  3. Remove the zone row (**Zone → Workers Routes**): the app has no zone of its own.
+  4. Account Resources: *Include* → this account.
+  5. Create it and copy the token. Cloudflare shows it only once.
+
+From the terminal: `gh secret set CLOUDFLARE_API_TOKEN --env production` asks for the value, so it doesn't end up in the shell history; the same for `CLOUDFLARE_ACCOUNT_ID`.
+
+To renew the token: create a new one, replace the secret, then delete the old token.
