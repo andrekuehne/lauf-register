@@ -123,5 +123,7 @@ border:2px solid var(--accent);border-radius:10px;cursor:pointer}
 .reg-delete{display:inline-block;margin-top:8px;padding:6px 0;color:var(--danger);font-size:.95rem}
 .btn-danger{background:var(--danger)}
 .cancel{margin-top:14px;text-align:center}
+.race-delete{margin-top:36px;text-align:center}
+.race-delete a{color:var(--danger)}
 .note{padding:12px;background:var(--warn-bg);border-radius:8px}
 `;

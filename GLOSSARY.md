@@ -77,5 +77,5 @@ The on-site table where Registrations are checked, bibs are handed out, and peop
 _Avoid_: Check-in, counter
 
 **Admin**:
-An organizer who signs in with their email address to create Races, open or close Registration, correct Registrations, export them, and delete them.
+An organizer who signs in with their email address to create Races, open or close Registration, correct Registrations, export them, delete them, and delete whole Races.
 _Avoid_: Organizer account, user

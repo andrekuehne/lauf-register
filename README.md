@@ -67,6 +67,10 @@ One-time setup in the Cloudflare dashboard:
 
 The registration flow runs in the browser from `src/client/flow.ts`. `scripts/build-client.mjs` bundles it for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
 
+## Data deletion
+
+Admins delete a Race (with all its Registrations) from the Race's admin page after typing its name. Anything left over is deleted by a daily cron trigger (`triggers` in `wrangler.jsonc`, 02:00 UTC): every Race whose date is 30 or more days past, counted in German time, as the consent text promises. Each run logs how many Races it deleted (Workers Logs). To fire it by hand locally: `npx wrangler dev --test-scheduled`, then open `http://localhost:8787/__scheduled`.
+
 ## Database migrations
 
 Migrations are plain SQL files in `migrations/`, applied in order. Create a new one with:

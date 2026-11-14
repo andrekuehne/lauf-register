@@ -9,6 +9,8 @@
     "watch_dir": "src"
   },
   "observability": { "enabled": true },
+  // Daily at 02:00 UTC (03:00/04:00 in Germany): deletes Races 30 days past their date (src/races/cleanup.ts).
+  "triggers": { "crons": ["0 2 * * *"] },
   // No per-version preview links: every version would otherwise stay reachable at its own URL.
   "preview_urls": false,
   "vars": {

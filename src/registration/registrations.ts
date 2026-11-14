@@ -84,6 +84,10 @@ export async function listRegistrations(db: D1Database, raceId: number): Promise
   return groupRows(results);
 }
 
+export async function countRegistrations(db: D1Database, raceId: number): Promise<number> {
+  return (await db.prepare("SELECT COUNT(*) AS n FROM registrations WHERE race_id = ?").bind(raceId).first<number>("n")) ?? 0;
+}
+
 export async function findRegistration(db: D1Database, raceId: number, number: number): Promise<StoredRegistration | null> {
   const { results } = await db
     .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? AND r.number = ? ORDER BY p.slot`)

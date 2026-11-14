@@ -2,12 +2,12 @@
 // appearing more than once in one Race's Registrations. Flagged, never blocked:
 // someone may genuinely run twice, e.g. once single and once in a Pair.
 
+import { normalizedText } from "../shared/same-text";
 import type { ParticipantInput } from "./registration-input";
 import type { StoredRegistration } from "./registrations";
 
 /** Case, surrounding and doubled spaces don't make a different person. */
-const normalized = (name: string) => name.trim().replace(/\s+/g, " ").toLocaleLowerCase("de-DE");
-const personOf = (p: ParticipantInput) => `${normalized(p.firstName)}|${normalized(p.lastName)}|${p.birthYear}`;
+const personOf = (p: ParticipantInput) => `${normalizedText(p.firstName)}|${normalizedText(p.lastName)}|${p.birthYear}`;
 
 /**
  * Looks up, for a Participant (Registration + slot index), the numbers of the

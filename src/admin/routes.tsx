@@ -5,11 +5,12 @@ import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort } from "../races/race-dates";
 import { MAX_RACE_NAME_LENGTH, validateRaceInput, type RaceInput, type RaceInputErrors } from "../races/race-input";
-import { createRace, findRaceByToken, listRaces, setRegistrationOpen, type Race, type RaceListItem } from "../races/races";
-import { deleteRegistration, findRegistration, listRegistrations } from "../registration/registrations";
+import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, type Race, type RaceListItem } from "../races/races";
+import { countRegistrations, deleteRegistration, findRegistration, listRegistrations } from "../registration/registrations";
+import { normalizedText } from "../shared/same-text";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
 import type { AdminIdentity } from "./identity";
-import { deleteRegistrationPage, racePath, raceRegistrationsPage } from "./registrations-page";
+import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage } from "./registrations-page";
 
 function NewRaceForm(props: { values?: Partial<RaceInput>; errors?: RaceInputErrors }) {
   const { values = {}, errors = {} } = props;
@@ -82,6 +83,11 @@ async function racesPage(c: Context<AppEnv>, form?: { values: RaceInput; errors:
 const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
 const REGISTRATION_NOT_FOUND = "Diese Anmeldung gibt es nicht (mehr).";
 
+/** The typed confirmation matches the Race's name; case and spacing don't matter. */
+function sameName(typed: unknown, name: string): boolean {
+  return typeof typed === "string" && normalizedText(typed) === normalizedText(name);
+}
+
 /** A Registration number from the URL, or null when it isn't one. */
 const registrationNumber = (param: string) => (/^\d{1,9}$/.test(param) ? Number(param) : null);
 
@@ -143,6 +149,22 @@ export function adminRoutes(identity: AdminIdentity) {
         // Personal data: never kept by the browser or anything in between.
         "cache-control": "no-store",
       });
+    }),
+  );
+
+  admin.get("/races/:token/delete", (c) =>
+    withRace(c, async (race) => deleteRacePage(c, race, await countRegistrations(c.env.DB, race.id))),
+  );
+
+  admin.post("/races/:token/delete", (c) =>
+    withRace(c, async (race) => {
+      const { confirm } = await c.req.parseBody();
+      if (!sameName(confirm, race.name)) {
+        const error = `Der Name stimmt nicht. Bitte „${race.name}“ eingeben.`;
+        return deleteRacePage(c, race, await countRegistrations(c.env.DB, race.id), error);
+      }
+      await deleteRace(c.env.DB, race.id);
+      return c.redirect("/admin", 303);
     }),
   );
 

@@ -19,14 +19,11 @@ export function formatRaceDateLong(isoDate: string, lang: Lang): string {
   }).format(atUtcMidnight(isoDate));
 }
 
-/** The organizers' time zone: registration times are shown in it. */
+/** The organizers' time zone: registration times are shown in it, and days are counted in it. */
 const RACE_TIME_ZONE = "Europe/Berlin";
 
-/**
- * When a Registration came in: "14:32" on the race day, "08.12. 21:05" on any
- * other day (registration can open before the day).
- */
-export function formatRegistrationTime(createdAt: string, raceDate: string): string {
+/** Calendar date and clock time of an instant in the organizers' time zone. */
+function inRaceTimeZone(instant: Date) {
   const parts = new Intl.DateTimeFormat("de-DE", {
     year: "numeric",
     month: "2-digit",
@@ -35,11 +32,32 @@ export function formatRegistrationTime(createdAt: string, raceDate: string): str
     minute: "2-digit",
     hourCycle: "h23",
     timeZone: RACE_TIME_ZONE,
-  }).formatToParts(new Date(createdAt));
+  }).formatToParts(instant);
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
-  const time = `${part("hour")}:${part("minute")}`;
-  const sameDay = `${part("year")}-${part("month")}-${part("day")}` === raceDate;
-  return sameDay ? time : `${part("day")}.${part("month")}. ${time}`;
+  return { year: part("year"), month: part("month"), day: part("day"), time: `${part("hour")}:${part("minute")}` };
+}
+
+/** The ISO date (YYYY-MM-DD) it is at `instant` in the organizers' time zone. */
+export function dateInRaceTimeZone(instant: Date): string {
+  const { year, month, day } = inRaceTimeZone(instant);
+  return `${year}-${month}-${day}`;
+}
+
+/** The ISO date `days` calendar days before `isoDate`. */
+export function daysBefore(isoDate: string, days: number): string {
+  const date = atUtcMidnight(isoDate);
+  date.setUTCDate(date.getUTCDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * When a Registration came in: "14:32" on the race day, "08.12. 21:05" on any
+ * other day (registration can open before the day).
+ */
+export function formatRegistrationTime(createdAt: string, raceDate: string): string {
+  const instant = new Date(createdAt);
+  const at = inRaceTimeZone(instant);
+  return dateInRaceTimeZone(instant) === raceDate ? at.time : `${at.day}.${at.month}. ${at.time}`;
 }
 
 /** "Mi., 09.12.2026" */

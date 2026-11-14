@@ -16,6 +16,7 @@ import { AdminPage, registrationCount } from "./admin-page";
 const t = strings("de").flow;
 
 export const racePath = (race: Race) => `/admin/races/${race.token}`;
+export const deleteRacePath = (race: Race) => `${racePath(race)}/delete`;
 const exportPath = (race: Race) => `${racePath(race)}/export.xlsx`;
 const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
@@ -118,7 +119,34 @@ export function raceRegistrationsPage(c: Context<AppEnv>, race: Race, registrati
           ))}
         </section>
       ))}
+      <p class="race-delete">
+        <a href={deleteRacePath(race)}>Lauf löschen …</a>
+      </p>
     </AdminPage>,
+  );
+}
+
+/** Asks for the Race's name before the whole Race is deleted; posting the form deletes it. */
+export function deleteRacePage(c: Context<AppEnv>, race: Race, count: number, error?: string) {
+  return c.html(
+    <AdminPage url={c.req.url} title="Lauf löschen" admin={c.get("adminEmail")}>
+      <p><a href={racePath(race)}>← {race.name}</a></p>
+      <h1>Lauf löschen?</h1>
+      <p>
+        <b>{race.name}</b> ({formatRaceDateShort(race.date, "de")}) wird mit {registrationCount(count)} und allen Angaben
+        dazu endgültig gelöscht. Das lässt sich nicht rückgängig machen. Der Link und der QR-Code führen danach ins Leere.
+      </p>
+      <form method="post" action={deleteRacePath(race)} class="card" novalidate>
+        <div class="field">
+          <label class="label" for="confirm">Zum Bestätigen den Namen des Laufs eingeben</label>
+          <input type="text" id="confirm" name="confirm" autocomplete="off" aria-invalid={error ? "true" : undefined} />
+          {error && <p class="error">{error}</p>}
+        </div>
+        <button type="submit" class="btn btn-danger">Lauf endgültig löschen</button>
+      </form>
+      <p class="cancel"><a href={racePath(race)}>Abbrechen</a></p>
+    </AdminPage>,
+    error ? 400 : 200,
   );
 }
 

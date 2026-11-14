@@ -44,6 +44,14 @@ export function postDelete(raceLink: string, number: number, headers: Record<str
   return postForm(deletePath(raceLink, number), {}, headers);
 }
 
+/** The admin page that asks before a whole Race is deleted; posting to it deletes. */
+export const deleteRacePath = (raceLink: string) => `${adminRacePath(raceLink)}/delete`;
+
+/** Deletes a Race through the admin area, confirming with `confirm` as the typed Race name. */
+export function postDeleteRace(raceLink: string, confirm: string, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  return postForm(deleteRacePath(raceLink), { confirm }, headers);
+}
+
 /** The public /r/… links on the admin Race list, newest race day first. */
 export async function publicLinks(): Promise<string[]> {
   const html = await (await asAdmin("/admin")).text();

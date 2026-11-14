@@ -1,4 +1,6 @@
-// Races in D1: creating, listing, looking up by public token, opening and closing Registration.
+// Races in D1: creating, listing, looking up by public token, opening and closing
+// Registration, and deleting. Deleting a Race deletes its Registrations and their
+// Participants with it (ON DELETE CASCADE): a hard delete, no undo.
 
 import type { RaceInput } from "./race-input";
 
@@ -83,6 +85,16 @@ export async function listRaces(db: D1Database): Promise<RaceListItem[]> {
 export async function setRegistrationOpen(db: D1Database, token: string, open: boolean): Promise<boolean> {
   const result = await db.prepare("UPDATE races SET registration_open = ? WHERE token = ?").bind(open ? 1 : 0, token).run();
   return result.meta.changes > 0;
+}
+
+export async function deleteRace(db: D1Database, raceId: number): Promise<void> {
+  await db.prepare("DELETE FROM races WHERE id = ?").bind(raceId).run();
+}
+
+/** Deletes every Race dated on or before `isoDate`; returns how many. */
+export async function deleteRacesDatedUpTo(db: D1Database, isoDate: string): Promise<number> {
+  const result = await db.prepare("DELETE FROM races WHERE date <= ?").bind(isoDate).run();
+  return result.meta.changes;
 }
 
 export async function findRaceByToken(db: D1Database, token: string): Promise<Race | null> {
