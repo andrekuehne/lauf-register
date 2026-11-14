@@ -37,6 +37,7 @@ npx wrangler login
 | `npm run dev` | Local dev server with a local D1 database (stored in `.wrangler/`). |
 | `npm test` | Runs the test suite against the real Worker and a freshly migrated local D1. |
 | `npm run test:watch` | Same, in watch mode. |
+| `npm run test:e2e` | End-to-end tests of the registration flow in phone-sized WebKit and Chromium (see below). |
 | `npm run typecheck` | Type-checks app and tests. |
 | `npm run db:migrate:local` | Applies new migrations to the local D1 database. |
 | `npm run db:migrate:remote` | Applies new migrations to the production D1 database. |
@@ -62,6 +63,14 @@ One-time setup in the Cloudflare dashboard:
 6. Check in a private browser window: `/admin` asks for an email and code; a Race link `/r/…` opens without sign-in.
 
 **Adding or removing an Admin:** edit the policy's email list in Zero Trust. Nothing to change in the app.
+
+## End-to-end tests
+
+`e2e/` drives the registration flow the way a Participant does, with Playwright in WebKit (stand-in for iPhone Safari) and Chromium, each at 390 px and 320 px phone width with touch. Every test creates its own Race through the admin pages, then registers through the public link and checks the result in the Admin's list.
+
+`npm run test:e2e` starts its own `wrangler dev` on port 8791 with a fresh local database in `.wrangler/e2e-state` (all migrations applied), separate from the `npm run dev` one. The admin sign-in is the local Access stand-in from `wrangler.jsonc` (`access.dev`), the same as for `npm run dev`; nothing in the app is faked.
+
+First time only, download the two browsers: `npx playwright install webkit chromium` (on Linux add `--with-deps` for the system libraries they need). A failed test leaves a trace in `test-results/` (`npx playwright show-trace <path>/trace.zip`); in CI the traces are attached to the run.
 
 ## Browser code
 
@@ -91,8 +100,8 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 | When | What runs |
 | --- | --- |
-| Every push (any branch) and every pull request | `npm ci`, `npm run typecheck`, `npm test` |
-| A push to `main`, after those checks pass | `npm run db:migrate:remote`, then `npm run deploy` |
+| Every push (any branch) and every pull request | `npm ci`, `npm run typecheck`, `npm test`; in parallel `npm run test:e2e` |
+| A push to `main`, after all of those pass | `npm run db:migrate:remote`, then `npm run deploy` |
 
 A red check means nothing was deployed. Pull requests and other branches are only checked. Runs on `main` queue up and finish in push order, so an older push never deploys over a newer one and a deploy is never cancelled midway. Deploying by hand (`npm run deploy`) still works, but the next push to `main` deploys anyway. The Node version for CI is in `.nvmrc`.
 
