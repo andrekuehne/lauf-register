@@ -74,7 +74,7 @@ First time only, download the two browsers: `npx playwright install webkit chrom
 
 ## Browser code
 
-The registration flow runs in the browser from `src/client/flow.ts`. `scripts/build-client.mjs` bundles it for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
+The browser scripts live in `src/client/`: the registration flow (`flow.ts`), the QR layer (`qr-layer.ts`) and the admin pages' confirmation dialogs (`confirm.ts`). `scripts/build-client.mjs` bundles them for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
 
 ## Data deletion
 

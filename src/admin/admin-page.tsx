@@ -1,5 +1,7 @@
 import type { Context } from "hono";
+import { raw } from "hono/html";
 import type { Child } from "hono/jsx";
+import { confirmBundle } from "../generated/confirm-bundle";
 import type { AppEnv } from "../language";
 import { Layout } from "../layout";
 
@@ -11,6 +13,7 @@ export function AdminPage(props: { url: string; title?: string; admin?: string; 
     <Layout lang="de" url={props.url} title={props.title ?? "Admin"} heading="Lauf-Register · Admin" languageSwitch={false}>
       {props.admin && <p class="muted admin-who">Angemeldet als {props.admin}</p>}
       {props.children}
+      <script>{raw(confirmBundle)}</script>
     </Layout>
   );
 }

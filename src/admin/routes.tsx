@@ -2,9 +2,10 @@ import { Hono, type Context } from "hono";
 import { csrf } from "hono/csrf";
 import { raceResultFileName, raceResultRows, RACERESULT_SHEET } from "../export/raceresult";
 import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
+import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, raceYear } from "../races/race-dates";
-import { publicRaceLink, publicRacePath } from "../races/race-link";
+import { publicRacePath } from "../races/race-link";
 import { MAX_RACE_NAME_LENGTH, validateRaceInput, type RaceInput, type RaceInputErrors } from "../races/race-input";
 import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, type Race, type RaceListItem } from "../races/races";
 import {
@@ -16,11 +17,15 @@ import {
   type StoredRegistration,
 } from "../registration/registrations";
 import { normalizedText } from "../shared/same-text";
+import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
 import { checkEdit, editRegistrationPage, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
+import { RegistrationToggle } from "./registration-toggle";
 import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage } from "./registrations-page";
+
+const qrStrings = strings("de").qr;
 
 function NewRaceForm(props: { values?: Partial<RaceInput>; errors?: RaceInputErrors }) {
   const { values = {}, errors = {} } = props;
@@ -43,38 +48,32 @@ function NewRaceForm(props: { values?: Partial<RaceInput>; errors?: RaceInputErr
   );
 }
 
-/** The Race's open/closed state and the button that flips it. */
-function RegistrationSwitch(props: { race: RaceListItem }) {
-  const open = props.race.registrationOpen;
-  return (
-    <form method="post" action={`/admin/races/${props.race.token}/registration`} class="reg-switch">
-      <input type="hidden" name="open" value={open ? "0" : "1"} />
-      <b class={open ? "reg-state reg-open" : "reg-state reg-closed"}>{open ? "Anmeldung offen" : "Anmeldung geschlossen"}</b>
-      <button type="submit" class="btn-small">{open ? "Anmeldung schließen" : "Anmeldung öffnen"}</button>
-    </form>
-  );
-}
-
+/** Each Race as a card: its Registrations, its public page, its QR code, and the open/closed toggle. */
 function RaceList(props: { races: RaceListItem[]; requestUrl: string }) {
   if (props.races.length === 0) return <p class="muted">Noch keine Läufe angelegt.</p>;
   return (
-    <ul class="race-list">
-      {props.races.map((race) => {
-        const path = publicRacePath(race.token);
-        return (
+    <>
+      <ul class="race-list">
+        {props.races.map((race) => (
           <li class="card">
             <b class="race-name">{race.name}</b>
             <span class="muted">
               {formatRaceDateShort(race.date, "de")} · {registrationCount(race.registrationCount)}
             </span>
-            <a href={path} class="race-link">{publicRaceLink(props.requestUrl, race.token)}</a>
-            <a href={racePath(race)} class="race-regs">Anmeldungen ansehen →</a>
-            <RegistrationSwitch race={race} />
+            <div class="race-actions">
+              <a href={racePath(race)} class="btn btn-secondary btn-compact">Anmeldungen ansehen</a>
+              <div class="btn-pair">
+                <a href={publicRacePath(race.token)} class="btn btn-secondary btn-compact">Anmeldeseite</a>
+                <QrButton label="QR-Code" race={race} class="btn btn-secondary btn-compact" />
+              </div>
+            </div>
+            <RegistrationToggle race={race} />
             <small class="muted">angelegt von {race.createdBy}</small>
           </li>
-        );
-      })}
-    </ul>
+        ))}
+      </ul>
+      <QrLayers t={qrStrings} requestUrl={props.requestUrl} races={props.races} />
+    </>
   );
 }
 
@@ -147,13 +146,17 @@ export function adminRoutes(identity: AdminIdentity) {
     return c.redirect("/admin", 303);
   });
 
-  admin.post("/races/:token/registration", async (c) => {
-    const { open } = await c.req.parseBody();
-    if (open !== "1" && open !== "0") return problemPage(c, "Ungültige Anfrage.", 400);
-    const found = await setRegistrationOpen(c.env.DB, c.req.param("token"), open === "1");
-    if (!found) return problemPage(c, RACE_NOT_FOUND, 404);
-    return c.redirect("/admin", 303);
-  });
+  admin.post("/races/:token/registration", (c) =>
+    withRace(c, async (race) => {
+      const { open, from } = await c.req.parseBody();
+      if (open !== "1" && open !== "0") return problemPage(c, "Ungültige Anfrage.", 400);
+      // Deleted by another Admin in the meantime.
+      const found = await setRegistrationOpen(c.env.DB, race.token, open === "1");
+      if (!found) return problemPage(c, RACE_NOT_FOUND, 404);
+      // Back to the page the toggle was on.
+      return c.redirect(from === "race" ? racePath(race) : "/admin", 303);
+    }),
+  );
 
   admin.get("/races/:token", (c) =>
     withRace(c, async (race) => raceRegistrationsPage(c, race, await listRegistrations(c.env.DB, race.id))),

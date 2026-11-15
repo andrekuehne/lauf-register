@@ -10,7 +10,7 @@ import type { AppEnv } from "../language";
 import { Layout } from "../layout";
 import { divisionIconSvg, ICONS } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
-import { QrButton, QrLayer } from "../ui/qr-layer";
+import { QrButton, QrLayers } from "../ui/qr-layer";
 import { FLOW_CONFIG_ID, type FlowConfig } from "./flow-config";
 
 /** What the public registration page needs to know about a Race. */
@@ -144,7 +144,7 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
             </button>
           ))}
           {/* For others nearby to scan; kept small so it doesn’t compete with the two runs. */}
-          <QrButton t={qr} />
+          <QrButton label={qr.show} race={race} />
         </section>
 
         <section data-step="single-or-pair" hidden>
@@ -215,10 +215,10 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
           </div>
           <p style="margin-top:16px">{t.deskHint}</p>
           <button type="button" class="btn btn-secondary" id="another">{t.another}</button>
-          <QrButton t={qr} />
+          <QrButton label={qr.show} race={race} />
         </section>
       </div>
-      <QrLayer t={qr} requestUrl={c.req.url} race={race} />
+      <QrLayers t={qr} requestUrl={c.req.url} races={[race]} />
       <script type="application/json" id={FLOW_CONFIG_ID}>{raw(scriptJson(config))}</script>
       <script>{raw(flowBundle)}</script>
     </Layout>,

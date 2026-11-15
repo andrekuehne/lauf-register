@@ -82,7 +82,12 @@ export function submit(raceLink: string, body: unknown) {
  */
 export function setRegistration(raceLink: string, open: boolean | string, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
   const value = open === true ? "1" : open === false ? "0" : open;
-  return postForm(`/admin/races/${raceLink.slice("/r/".length)}/registration`, { open: value }, headers);
+  return postForm(`${adminRacePath(raceLink)}/registration`, { open: value }, headers);
+}
+
+/** Opens or closes Registration from the Race's own admin page, as its toggle there does. */
+export function setRegistrationOnRacePage(raceLink: string, open: boolean) {
+  return postForm(`${adminRacePath(raceLink)}/registration`, { open: open ? "1" : "0", from: "race" }, { "x-test-admin": ADMIN });
 }
 
 /**

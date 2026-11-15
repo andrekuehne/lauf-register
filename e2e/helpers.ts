@@ -7,20 +7,29 @@ export const RACE_YEAR = Number(RACE_DATE.slice(0, 4));
 
 /**
  * Creates a Race dated today through the admin pages, opens its Registration
- * and returns the public link's path (/r/…). Each test gets a Race of its own.
+ * (confirming the dialog) and returns the public link's path (/r/…). Each test
+ * gets a Race of its own.
  */
-export async function newRace(page: Page): Promise<string> {
+export async function newRace(page: Page, options: { open?: boolean } = {}): Promise<string> {
   const name = `E2E-Lauf ${Math.random().toString(36).slice(2, 8)}`;
   await page.goto("/admin");
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByLabel("Datum").fill(RACE_DATE);
   await page.getByRole("button", { name: "Lauf anlegen" }).click();
   const card = page.locator("li.card").filter({ has: page.locator(".race-name", { hasText: name }) });
-  await card.getByRole("button", { name: "Anmeldung öffnen" }).click();
-  await expect(card).toContainText("Anmeldung offen");
-  const link = await card.locator("a.race-link").getAttribute("href");
+  if (options.open ?? true) {
+    page.once("dialog", (dialog) => dialog.accept());
+    await card.getByRole("button", { name: "Offen" }).click();
+    await expect(card.getByRole("button", { name: "Offen", pressed: true })).toBeVisible();
+  }
+  const link = await card.getByRole("link", { name: "Anmeldeseite" }).getAttribute("href");
   if (!link) throw new Error(`Race "${name}" has no public link`);
   return link;
+}
+
+/** The card of the Race whose public link this is, on the admin start page. */
+export function raceCard(page: Page, raceLink: string): Locator {
+  return page.locator("li.card").filter({ has: page.locator(`a[href="${raceLink}"]`) });
 }
 
 /** The Race's admin page, with its list of Registrations (the same token as the public link). */

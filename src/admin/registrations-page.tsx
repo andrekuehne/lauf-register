@@ -11,8 +11,9 @@ import type { ParticipantInput } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
 import { divisionIconSvg } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
-import { QrButton, QrLayer } from "../ui/qr-layer";
+import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, registrationCount } from "./admin-page";
+import { RegistrationToggle } from "./registration-toggle";
 
 const t = strings("de").flow;
 const qrStrings = strings("de").qr;
@@ -82,15 +83,15 @@ function RaceHeader(props: { race: Race; count: number }) {
       <p><a href="/admin">← Alle Läufe</a></p>
       <h1>{props.race.name}</h1>
       <p class="muted">
-        {formatRaceDateShort(props.race.date, "de")} · {registrationCount(props.count)} ·{" "}
-        {props.race.registrationOpen ? "Anmeldung offen" : "Anmeldung geschlossen"}
+        {formatRaceDateShort(props.race.date, "de")} · {registrationCount(props.count)}
       </p>
+      <RegistrationToggle race={props.race} from="race" />
       <a href={exportPath(props.race)} class="btn btn-secondary" download>
         Excel für RaceResult herunterladen
       </a>
       <p class="race-qr">
         <a href={posterPath(props.race)}>Aushang (A4) drucken</a>
-        <QrButton t={qrStrings} />
+        <QrButton label={qrStrings.show} race={props.race} />
       </p>
     </>
   );
@@ -133,7 +134,7 @@ export function raceRegistrationsPage(c: Context<AppEnv>, race: Race, registrati
       <p class="race-delete">
         <a href={deleteRacePath(race)}>Lauf löschen …</a>
       </p>
-      <QrLayer t={qrStrings} requestUrl={c.req.url} race={race} />
+      <QrLayers t={qrStrings} requestUrl={c.req.url} races={[race]} />
     </AdminPage>,
   );
 }
