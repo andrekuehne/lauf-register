@@ -82,6 +82,22 @@ describe("the RaceResult export", () => {
     expect(rows.slice(1).map((row) => row[1])).toEqual([1, 2]);
   });
 
+  it("formats StartNr, Wettbewerb and Jahrgang as integers, so importers don't show 1985.00", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [ben, anna]);
+
+    const { rows, formats } = await download(race);
+
+    const INTEGER = 1;
+    const GENERAL = 0;
+    for (const column of ["StartNr", "Wettbewerb", "Jahrgang", "Läufer 2 Jahrgang"]) {
+      const i = HEADER.indexOf(column);
+      expect(typeof rows[1]![i], column).toBe("number");
+      expect(formats[1]![i], column).toBe(INTEGER);
+    }
+    expect(formats[1]![HEADER.indexOf("Nachname")]).toBe(GENERAL);
+  });
+
   it("keeps names and clubs as entered, special characters included", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [{ ...anna, firstName: "Zoë-Ann", lastName: "O'Brien & Söhne <Jr>", club: 'SV "Grün-Weiß" 1910' }]);

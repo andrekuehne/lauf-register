@@ -1,5 +1,5 @@
 // A minimal .xlsx writer: one sheet of plain values (text and numbers), no
-// formulas, no macros. Strings go into a shared string table, as Excel itself
+// formulas, no macros. Whole numbers are formatted as integers. Strings go into a shared string table, as Excel itself
 // writes them, so importers that only know Excel's own files read them too.
 
 import { strToU8, zipSync } from "fflate";
@@ -35,7 +35,9 @@ function sheetXml(rows: Cell[][], stringIndex: (text: string) => number): string
     const cells = row.map((value, c) => {
       const ref = `${columnName(c)}${r + 1}`;
       if (value === null || value === "") return "";
-      if (typeof value === "number") return `<c r="${ref}"><v>${value}</v></c>`;
+      // Whole numbers carry Excel's integer format "0" (style 1): importers that
+      // read General-formatted numbers as decimals show 1985 as 1985.00 otherwise.
+      if (typeof value === "number") return `<c r="${ref}"${Number.isInteger(value) ? ' s="1"' : ""}><v>${value}</v></c>`;
       return `<c r="${ref}" t="s"><v>${stringIndex(value)}</v></c>`;
     });
     return `<row r="${r + 1}">${cells.join("")}</row>`;
@@ -49,7 +51,8 @@ const STYLES =
   '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
   '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
   '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-  '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>' +
+  '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+  '<xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
   '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
   "</styleSheet>";
 

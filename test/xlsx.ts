@@ -2,7 +2,8 @@
 // Also checks the package hangs together (declared parts exist, relationships
 // point at real parts), which spreadsheet programs insist on.
 // Understands what spreadsheet files commonly hold for plain values: shared or
-// inline strings and numbers. Missing cells read as null.
+// inline strings and numbers. Missing cells read as null. `formats` holds each
+// cell's number format id (0 = General, 1 = integer "0"), null where there is no cell.
 
 import { strFromU8, unzipSync } from "fflate";
 
@@ -25,7 +26,7 @@ function columnIndex(ref: string): number {
 /** The text of an <si> or <is> element (joined <t> runs). */
 const textOf = (xml: string) => [...xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map((m) => unescapeXml(m[1]!)).join("");
 
-export function readXlsx(bytes: Uint8Array): { sheetNames: string[]; rows: Cell[][] } {
+export function readXlsx(bytes: Uint8Array): { sheetNames: string[]; rows: Cell[][]; formats: (number | null)[][] } {
   const files = unzipSync(bytes);
   const file = (path: string) => {
     const content = files[path];
@@ -41,10 +42,14 @@ export function readXlsx(bytes: Uint8Array): { sheetNames: string[]; rows: Cell[
   const shared = files["xl/sharedStrings.xml"]
     ? [...file("xl/sharedStrings.xml").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => textOf(m[1]!))
     : [];
+  const cellXfs = file("xl/styles.xml").match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)?.[1] ?? "";
+  const numFmtIds = [...cellXfs.matchAll(/<xf\b[^>]*?\bnumFmtId="(\d+)"/g)].map((m) => Number(m[1]));
 
   const rows: Cell[][] = [];
+  const formats: (number | null)[][] = [];
   for (const row of file("xl/worksheets/sheet1.xml").matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
     const cells: Cell[] = [];
+    const cellFormats: (number | null)[] = [];
     for (const cell of row[1]!.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const attrs = cell[1]!;
       const body = cell[2] ?? "";
@@ -57,9 +62,12 @@ export function readXlsx(bytes: Uint8Array): { sheetNames: string[]; rows: Cell[
       else if (type === "str" && value !== undefined) parsed = unescapeXml(value);
       else if (value !== undefined) parsed = Number(value);
       while (cells.length < index) cells.push(null);
+      while (cellFormats.length < index) cellFormats.push(null);
       cells[index] = parsed;
+      cellFormats[index] = numFmtIds[Number(attrs.match(/\bs="(\d+)"/)?.[1] ?? 0)] ?? 0;
     }
     rows.push(cells);
+    formats.push(cellFormats);
   }
-  return { sheetNames, rows };
+  return { sheetNames, rows, formats };
 }
