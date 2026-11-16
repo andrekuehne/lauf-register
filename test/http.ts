@@ -62,6 +62,18 @@ export function postSettings(raceLink: string, fields: Record<string, string>, h
   return postForm(settingsPath(raceLink), fields, headers);
 }
 
+/** Reserving numbers from the Race settings page: a number or range as typed, and the taken numbers the Admin confirmed, if any. */
+export function postReserve(raceLink: string, numbers: string, confirmed?: string, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  const fields: Record<string, string> = { numbers };
+  if (confirmed !== undefined) fields.confirmed = confirmed;
+  return postForm(`${adminRacePath(raceLink)}/reserved`, fields, headers);
+}
+
+/** Removes one Reserved number entry (its trash-bin button on the settings page). */
+export function postUnreserve(raceLink: string, from: number, to: number, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  return postForm(`${adminRacePath(raceLink)}/reserved/remove`, { from: String(from), to: String(to) }, headers);
+}
+
 /** The admin page that asks before a whole Race is deleted; posting to it deletes. */
 export const deleteRacePath = (raceLink: string) => `${adminRacePath(raceLink)}/delete`;
 

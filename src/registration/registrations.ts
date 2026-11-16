@@ -1,8 +1,9 @@
 // Registrations in D1: storing a submitted Registration with its Participants,
 // listing a Race's Registrations, and editing or deleting one.
 
-import type { Duration } from "../domain/categories";
+import type { Duration, SingleOrPair } from "../domain/categories";
 import { NUMBER_RANGES } from "../domain/numbers";
+import type { ReservedRange } from "../domain/reserved-numbers";
 import type { ParticipantInput, RegistrationContent, RegistrationInput } from "./registration-input";
 
 /** A Registration as stored: its Participants in entered order. */
@@ -92,6 +93,39 @@ export async function countRegistrations(db: D1Database, raceId: number): Promis
   return (await db.prepare("SELECT COUNT(*) AS n FROM registrations WHERE race_id = ?").bind(raceId).first<number>("n")) ?? 0;
 }
 
+/** The Registrations of a Race whose numbers lie within the range, in number order. */
+export async function listRegistrationsWithin(db: D1Database, raceId: number, range: ReservedRange): Promise<StoredRegistration[]> {
+  const { results } = await db
+    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? AND r.number BETWEEN ? AND ? ORDER BY r.number, p.slot`)
+    .bind(raceId, range.from, range.to)
+    .all<RegistrationRow>();
+  return groupRows(results);
+}
+
+/**
+ * Two statements that give the Registration with this number the next
+ * automatic number of its series, as if it registered now: the first notes
+ * that number as the series' last one handed out (failing when there is none,
+ * see `isNoNumberLeft`), the second moves the Registration there and returns
+ * its new number. Neither touches anything when the Race has no such Registration.
+ */
+export function renumberStatements(db: D1Database, raceId: number, registration: StoredRegistration): [D1PreparedStatement, D1PreparedStatement] {
+  const series = seriesOf(registration.participants);
+  const lastColumn = lastNumberColumn(series);
+  const exists = "EXISTS (SELECT 1 FROM registrations WHERE race_id = ? AND number = ?)";
+  return [
+    db
+      .prepare(`UPDATE races SET ${lastColumn} = ${nextNumberSql(series)} WHERE id = ? AND ${exists}`)
+      .bind(raceId, raceId, registration.number),
+    db
+      .prepare(`UPDATE registrations SET number = (SELECT ${lastColumn} FROM races WHERE id = ?) WHERE race_id = ? AND number = ? RETURNING number`)
+      .bind(raceId, raceId, registration.number),
+  ];
+}
+
+/** Whether a batch with `renumberStatements` failed because a Registration got no number (NULL into a NOT NULL column). */
+export const isNoNumberLeft = (error: unknown) => String(error).includes("NOT NULL constraint failed");
+
 export async function findRegistration(db: D1Database, raceId: number, number: number): Promise<StoredRegistration | null> {
   const { results } = await db
     .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? AND r.number = ? ORDER BY p.slot`)
@@ -143,38 +177,52 @@ async function findNumberByAttempt(db: D1Database, raceId: number, attemptId: st
     .first<number>("number");
 }
 
+const seriesOf = (participants: readonly unknown[]): SingleOrPair => (participants.length === 2 ? "pair" : "single");
+
+/** The column holding the number a Race's series handed out last (0: none yet). */
+const lastNumberColumn = (series: SingleOrPair) => `last_${series}_number`;
+
+/**
+ * SQL for the next automatic number of a series in the Race of the enclosing
+ * query's `races` row, NULL when there is none: the smallest number that is at
+ * least the series' First number, above the number it handed out last, within
+ * its range, not taken in the Race and not Reserved.
+ */
+function nextNumberSql(series: SingleOrPair): string {
+  const { to } = NUMBER_RANGES[series];
+  const startSql = `MAX(races.first_${series}_number, races.${lastNumberColumn(series)} + 1)`;
+  // The smallest free number is the start itself or right after a taken or Reserved one.
+  return `(
+    SELECT MIN(candidate) FROM (
+      SELECT ${startSql} AS candidate
+      UNION SELECT number + 1 FROM registrations WHERE race_id = races.id
+      UNION SELECT number + 1 FROM reserved_numbers WHERE race_id = races.id
+    )
+    WHERE candidate >= ${startSql} AND candidate <= ${to}
+      AND candidate NOT IN (SELECT number FROM registrations WHERE race_id = races.id)
+      AND candidate NOT IN (SELECT number FROM reserved_numbers WHERE race_id = races.id)
+  )`;
+}
+
 /**
  * One transaction: store the Registration with the next number of its series
- * (singles or Pairs), note that number as the series' last one handed out,
- * then store the Participants. If any step fails (e.g. the attempt ID is
- * already stored), nothing is kept, the last handed-out number included.
- *
- * The next number is the smallest one that is at least the series' First
- * number, above the number it handed out last, within its range, and not
- * taken in the Race. When there is none, nothing is stored.
+ * (singles or Pairs, see `nextNumberSql`), note that number as the series'
+ * last one handed out, then store the Participants. If any step fails (e.g.
+ * the attempt ID is already stored), nothing is kept, the last handed-out
+ * number included. When there is no next number, nothing is stored.
  *
  * Every step only touches a Race whose Registration is open, so a Race closed
  * a moment ago stores nothing. Null when nothing was stored.
  */
 async function insertRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<number | null> {
-  const series = input.participants.length === 2 ? "pair" : "single";
-  const lastColumn = `last_${series}_number`;
-  const { to } = NUMBER_RANGES[series];
-  const startSql = `MAX(races.first_${series}_number, races.${lastColumn} + 1)`;
-  // The smallest free number is the start itself or right after a taken one.
-  const nextNumberSql = `(
-    SELECT MIN(candidate) FROM (
-      SELECT ${startSql} AS candidate
-      UNION SELECT number + 1 FROM registrations WHERE race_id = races.id
-    )
-    WHERE candidate >= ${startSql} AND candidate <= ${to}
-      AND candidate NOT IN (SELECT number FROM registrations WHERE race_id = races.id)
-  )`;
+  const series = seriesOf(input.participants);
+  const lastColumn = lastNumberColumn(series);
+  const nextNumber = nextNumberSql(series);
   const registration = db
     .prepare(
       `INSERT INTO registrations (race_id, number, duration, attempt_id)
-       SELECT id, ${nextNumberSql}, ?, ? FROM races
-       WHERE id = ? AND registration_open = 1 AND ${nextNumberSql} IS NOT NULL
+       SELECT id, ${nextNumber}, ?, ? FROM races
+       WHERE id = ? AND registration_open = 1 AND ${nextNumber} IS NOT NULL
        RETURNING number`,
     )
     .bind(input.duration, input.attemptId, raceId);

@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { csrf } from "hono/csrf";
 import { raceResultFileName, raceResultRows, RACERESULT_SHEET } from "../export/raceresult";
 import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
+import { parseReservedRange } from "../domain/reserved-numbers";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, raceYear } from "../races/race-dates";
@@ -13,18 +14,20 @@ import {
   deleteRegistration,
   findRegistration,
   listRegistrations,
+  listRegistrationsWithin,
   updateRegistration,
   type StoredRegistration,
 } from "../registration/registrations";
+import { listReservedNumbers, removeReservedNumbers, reserveNumbers } from "../registration/reserved-numbers";
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
 import { checkEdit, editRegistrationPage, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
-import { RaceFields, raceSettingsPage } from "./race-settings-page";
+import { confirmedNumbers, RaceFields, raceSettingsPage, reservedSectionPath, type ReservedSectionState } from "./race-settings-page";
 import { RegistrationToggle } from "./registration-toggle";
-import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage } from "./registrations-page";
+import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage, settingsPath } from "./registrations-page";
 
 const qrStrings = strings("de").qr;
 
@@ -83,6 +86,7 @@ async function racesPage(c: Context<AppEnv>, form?: { values: RaceFormValues; er
 
 const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
 const REGISTRATION_NOT_FOUND = "Diese Anmeldung gibt es nicht (mehr).";
+const NO_NUMBER_LEFT = "Es ist keine Startnummer mehr frei, um die betroffenen Anmeldungen neu zu nummerieren. Es wurde nichts gesperrt.";
 
 /** The typed confirmation matches the Race's name; case and spacing don't matter. */
 function sameName(typed: unknown, name: string): boolean {
@@ -99,6 +103,21 @@ function withRegistration(c: Context<AppEnv>, then: (race: Race, registration: S
     const registration = number === null ? null : await findRegistration(c.env.DB, race.id, number);
     return registration ? then(race, registration) : problemPage(c, REGISTRATION_NOT_FOUND, 404);
   });
+}
+
+/**
+ * The Race settings page with its Reserved numbers as stored; `reserved` adds
+ * what the section shows besides them, `form` the Race form's posted values
+ * and errors (otherwise the stored values).
+ */
+async function settingsPage(
+  c: Context<AppEnv>,
+  race: Race,
+  reserved: Omit<ReservedSectionState, "numbers"> = {},
+  form: { values: RaceFormValues; errors: RaceInputErrors } = { values: raceFormValues(race), errors: {} },
+) {
+  const numbers = await listReservedNumbers(c.env.DB, race.id);
+  return raceSettingsPage(c, race, form.values, form.errors, { ...reserved, numbers });
 }
 
 /** Runs `then` with the Race named by the URL's token, or answers 404. */
@@ -154,15 +173,43 @@ export function adminRoutes(identity: AdminIdentity) {
     withRace(c, async (race) => raceRegistrationsPage(c, race, await listRegistrations(c.env.DB, race.id))),
   );
 
-  admin.get("/races/:token/settings", (c) => withRace(c, async (race) => raceSettingsPage(c, race, raceFormValues(race))));
+  admin.get("/races/:token/settings", (c) => withRace(c, async (race) => settingsPage(c, race)));
 
   admin.post("/races/:token/settings", (c) =>
     withRace(c, async (race) => {
       const checked = validateRaceInput(await c.req.parseBody());
-      if (!checked.ok) return raceSettingsPage(c, race, checked.values, checked.errors);
+      if (!checked.ok) return settingsPage(c, race, {}, checked);
       // Deleted by another Admin in the meantime: say so rather than pretend it was saved.
       if (!(await updateRace(c.env.DB, race.id, checked.input))) return problemPage(c, RACE_NOT_FOUND, 404);
       return c.redirect(racePath(race), 303);
+    }),
+  );
+
+  admin.post("/races/:token/reserved", (c) =>
+    withRace(c, async (race) => {
+      const { numbers, confirmed } = await c.req.parseBody();
+      const typed = typeof numbers === "string" ? numbers : "";
+      const parsed = parseReservedRange(typed);
+      if (!parsed.ok) return settingsPage(c, race, { typed, error: parsed.error });
+      const taken = await listRegistrationsWithin(c.env.DB, race.id, parsed);
+      // Ask first, and again when the taken numbers changed since the Admin was asked.
+      if (taken.length > 0 && confirmed !== confirmedNumbers(taken)) return settingsPage(c, race, { typed, toConfirm: taken });
+      const result = await reserveNumbers(c.env.DB, race.id, parsed);
+      if ("noNumberLeft" in result) return settingsPage(c, race, { typed, error: NO_NUMBER_LEFT });
+      if (result.moves.length === 0) return c.redirect(reservedSectionPath(race), 303);
+      // Shown right away rather than after a redirect: the desk needs these lines to hand out the new bibs.
+      return settingsPage(c, race, { moves: result.moves });
+    }),
+  );
+
+  admin.post("/races/:token/reserved/remove", (c) =>
+    withRace(c, async (race) => {
+      const body = await c.req.parseBody();
+      const from = registrationNumber(String(body.from ?? ""));
+      const to = registrationNumber(String(body.to ?? ""));
+      if (from === null || to === null) return problemPage(c, "Ungültige Anfrage.", 400);
+      await removeReservedNumbers(c.env.DB, race.id, { from, to });
+      return c.redirect(reservedSectionPath(race), 303);
     }),
   );
 

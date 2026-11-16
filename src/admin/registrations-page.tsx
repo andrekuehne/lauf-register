@@ -31,7 +31,8 @@ const DURATION_ORDER: readonly Duration[] = [60, 30];
 
 const divisionOfRegistration = (registration: StoredRegistration) => divisionOf(registration.participants.map((p) => p.gender));
 
-function fullName(p: ParticipantInput): string {
+/** „Dr. Anna Muster“ */
+export function fullName(p: ParticipantInput): string {
   return `${p.title === "none" ? "" : `${t.titles[p.title]} `}${p.firstName} ${p.lastName}`;
 }
 

@@ -1,8 +1,8 @@
-// The Admin's Race cards and the Registration open/closed toggle, in the same
-// phone-sized browsers as the registration flow.
+// The Admin's Race cards, the Registration open/closed toggle and Reserved
+// numbers, in the same phone-sized browsers as the registration flow.
 
 import { expect, test, type Dialog, type Locator, type Page } from "@playwright/test";
-import { adminRacePath, newRace, raceCard } from "./helpers";
+import { adminRacePath, adminRegistration, consentAndSubmit, newRace, raceCard, startRegistration, tapNext } from "./helpers";
 
 /** Taps a half of the toggle in `scope`, answers the question that follows, and returns what it asked. */
 async function tapToggle(page: Page, scope: Locator, half: "Offen" | "Geschlossen", answer: "OK" | "Abbrechen"): Promise<string> {
@@ -89,4 +89,28 @@ test("a card's buttons lead to the Race's Registrations, its public page and its
   await page.goBack();
   await raceCard(page, second).getByRole("link", { name: "Anmeldeseite" }).tap();
   await expect(page).toHaveURL(new RegExp(`${second}(#.*)?$`));
+});
+
+test("reserving a lost bib: the Admin confirms, and the Registration gets a new number", async ({ page }) => {
+  const link = await newRace(page);
+  await startRegistration(page, link, ["Stundenlauf", "Einzeln", "Frau"], { firstName: "Erika", lastName: "Muster", birthYear: "1985" });
+  await tapNext(page);
+  expect(await consentAndSubmit(page)).toBe("1");
+
+  await page.goto(adminRacePath(link));
+  await page.getByRole("link", { name: /^Einstellungen/ }).tap();
+  await page.getByLabel("Startnummer oder Bereich sperren").fill("1");
+  await page.getByRole("button", { name: "Sperren", exact: true }).tap();
+
+  // The answer opens at the section, not at the top of the long page.
+  await expect(page.getByRole("alert")).toBeInViewport();
+  await expect(page.getByRole("alert")).toContainText("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.");
+  await page.getByRole("button", { name: "Sperren und neue Startnummer vergeben" }).tap();
+
+  await expect(page.getByRole("status")).toBeInViewport();
+  await expect(page.getByRole("status")).toContainText("1 → 2 (Erika Muster)");
+  await expect(page.getByRole("button", { name: "1 entsperren" })).toBeVisible();
+  const moved = await adminRegistration(page, link, "2");
+  await expect(moved).toContainText("Erika Muster");
+  await expect(page.locator('li[data-registration="1"]')).toHaveCount(0);
 });

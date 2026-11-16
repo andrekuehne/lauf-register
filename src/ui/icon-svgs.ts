@@ -10,12 +10,15 @@ const pair =
 const stopwatch =
   '<path d="M9 1h6v2H9zM19 7.4l1.4-1.4-1.4-1.4-1.5 1.5A9 9 0 1 0 19 7.4zM12 21a7 7 0 1 1 0-14 7 7 0 0 1 0 14zm1-11h-2v5l4 2.4.9-1.6-2.9-1.8z"/>';
 
+const trash = '<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>';
+
 const svg = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 
 export const ICONS = {
   single: svg(person),
   pair: svg(pair),
   duration: svg(stopwatch),
+  trash: svg(trash),
 };
 
 export function divisionIconSvg(division: Division): string {

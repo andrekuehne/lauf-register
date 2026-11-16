@@ -5,7 +5,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { pairRegistration as pair, registration as single } from "./fixtures";
-import { adminRacePath, asAdmin, newRace, numberOf, postDelete, submit } from "./http";
+import { adminRacePath, asAdmin, newRace, numberOf, postDelete, postReserve, submit } from "./http";
 
 beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
@@ -40,6 +40,26 @@ describe("Registration numbers", () => {
     for (let i = 0; i < 3; i++) numbers.push(await numberOf(await submit(race, single())));
 
     expect(numbers).toEqual([4, 6, 7]);
+  });
+
+  it("skip Reserved numbers in both series", async () => {
+    const race = await newRace("Stundenlauf");
+    expect((await postReserve(race, "2-3")).status).toBe(303);
+    expect((await postReserve(race, "5")).status).toBe(303);
+    expect((await postReserve(race, "1001")).status).toBe(303);
+
+    const numbers = [];
+    for (const body of [single(), single(), single(), pair()]) numbers.push(await numberOf(await submit(race, body)));
+
+    expect(numbers).toEqual([1, 4, 6, 1002]);
+  });
+
+  it("send a Registration to the Race desk when the only numbers left are Reserved", async () => {
+    const race = await newRace("Stundenlauf", "2026-12-09", { firstSingleNumber: 998 });
+    await postReserve(race, "999");
+    expect(await numberOf(await submit(race, single()))).toBe(998);
+
+    expect((await submit(race, single())).status).toBe(409);
   });
 
   it("send a Registration to the Race desk when its series has no number left, and stay full", async () => {

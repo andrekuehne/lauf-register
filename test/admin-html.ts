@@ -19,6 +19,24 @@ export function links(html: string): { text: string; href: string }[] {
   return [...html.matchAll(/<a([^>]*)>([\s\S]*?)<\/a>/g)].map((m) => ({ text: textOf(m[2]!), href: attr(m[1]!, "href") ?? "" }));
 }
 
+/** A piece of a page as plain text, the way it reads on screen. */
+export const pageText = textOf;
+
+/** The Reserved number ranges on a Race settings page: their text and the range their remove button removes. */
+export function reservedRangesOnPage(html: string): { text: string; from: string | undefined; to: string | undefined; label: string | undefined }[] {
+  const list = html.match(/<ul class="reserved-list">([\s\S]*?)<\/ul>/)?.[1] ?? "";
+  return [...list.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => {
+    const item = m[1]!;
+    const input = (name: string) => attr(item.match(new RegExp(`<input[^>]*name="${name}"[^>]*>`))?.[0] ?? "", "value");
+    return {
+      text: textOf(item),
+      from: input("from"),
+      to: input("to"),
+      label: attr(item.match(/<button([^>]*)>/)?.[1] ?? "", "aria-label"),
+    };
+  });
+}
+
 export type Toggle = {
   /** The half shown as the current state. */
   state: string;
