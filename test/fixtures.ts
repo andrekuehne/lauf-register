@@ -8,6 +8,9 @@ export const clara = { gender: "F", title: "none", firstName: "Clara", lastName:
 export const ben = { gender: "M", title: "none", firstName: "Ben", lastName: "Beispiel", birthYear: 1990, club: null };
 export const emil = { gender: "M", title: "none", firstName: "Emil", lastName: "Beispiel", birthYear: 2017, club: null };
 
+/** A valid Pair Registration for Anna and Ben in the Stundenlauf, with a fresh attempt ID. */
+export const pairRegistration = () => registration({ participants: [anna, ben] });
+
 /** A valid single Registration for Anna in the Stundenlauf, with a fresh attempt ID; override any field. */
 export function registration(overrides: Record<string, unknown> = {}) {
   return {

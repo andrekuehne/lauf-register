@@ -39,7 +39,7 @@ export function raceResultFileName(race: Race): string {
   return `${ascii || "Lauf"}-${race.date}.xlsx`;
 }
 
-/** The header row, then one row per Registration in Registration-number order (singles 1…, then Pairs 1001…). */
+/** The header row, then one row per Registration in Registration-number order (singles, then Pairs). */
 export function raceResultRows(registrations: StoredRegistration[]): Cell[][] {
   const byNumber = [...registrations].sort((a, b) => a.number - b.number);
   return [

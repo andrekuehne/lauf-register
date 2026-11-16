@@ -150,4 +150,6 @@ color:var(--muted);background:var(--card);border:2px solid var(--line);cursor:po
 .race-qr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:12px 0 0}
 .race-qr a{display:inline-block;padding:12px 0;color:var(--accent)}
 .race-qr .qr-open{display:inline-block;margin:0;padding:12px 0;font-size:1rem}
+.race-settings{margin:0}
+.race-settings a{display:inline-block;padding:12px 0;color:var(--accent)}
 `;

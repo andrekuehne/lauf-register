@@ -2,6 +2,7 @@
 // listing a Race's Registrations, and editing or deleting one.
 
 import type { Duration } from "../domain/categories";
+import { NUMBER_RANGES } from "../domain/numbers";
 import type { ParticipantInput, RegistrationContent, RegistrationInput } from "./registration-input";
 
 /** A Registration as stored: its Participants in entered order. */
@@ -13,11 +14,12 @@ export type StoredRegistration = {
   participants: ParticipantInput[];
 };
 
-export type SubmitResult = { number: number } | { closed: true };
+export type SubmitResult = { number: number } | { closed: true } | { full: true };
 
 /**
- * Stores a Registration and returns its Registration number, or `closed` when
- * Registration for the Race is closed. Idempotent per Race and attempt ID:
+ * Stores a Registration and returns its Registration number, `closed` when
+ * Registration for the Race is closed, or `full` when the Registration's
+ * series (singles or Pairs) has no number left. Idempotent per Race and attempt ID:
  * repeating an attempt returns the number it already got and stores nothing
  * new, even after Registration has been closed in between (the phone may
  * never have received the first answer).
@@ -28,7 +30,9 @@ export async function submitRegistration(db: D1Database, raceId: number, input: 
     if (existing !== null) return { number: existing };
     try {
       const number = await insertRegistration(db, raceId, input);
-      return number === null ? { closed: true } : { number };
+      if (number !== null) return { number };
+      const open = await db.prepare("SELECT registration_open FROM races WHERE id = ?").bind(raceId).first<number>("registration_open");
+      return open === 1 ? { full: true } : { closed: true };
     } catch (error) {
       // A concurrent submit of the same attempt (double tap) won the race: the
       // lookup above now finds it. Anything else is a real error.
@@ -139,31 +143,46 @@ async function findNumberByAttempt(db: D1Database, raceId: number, attemptId: st
     .first<number>("number");
 }
 
-/** Pair numbers start above any realistic count of singles, as on the organizers' lists. */
-const FIRST_PAIR_NUMBER = 1001;
-
 /**
- * One transaction: count the Race's single or Pair counter up, store the
- * Registration with the resulting number, then its Participants. If any step
- * fails (e.g. the attempt ID is already stored), nothing is kept, the counter included.
+ * One transaction: store the Registration with the next number of its series
+ * (singles or Pairs), note that number as the series' last one handed out,
+ * then store the Participants. If any step fails (e.g. the attempt ID is
+ * already stored), nothing is kept, the last handed-out number included.
+ *
+ * The next number is the smallest one that is at least the series' First
+ * number, above the number it handed out last, within its range, and not
+ * taken in the Race. When there is none, nothing is stored.
+ *
  * Every step only touches a Race whose Registration is open, so a Race closed
- * a moment ago stores nothing and the result is null.
+ * a moment ago stores nothing. Null when nothing was stored.
  */
 async function insertRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<number | null> {
-  const isPair = input.participants.length === 2;
-  const counter = isPair ? "last_pair_number" : "last_single_number";
-  const number = isPair ? `${FIRST_PAIR_NUMBER - 1} + last_pair_number` : "last_single_number";
-  const nextNumber = db
-    .prepare(`UPDATE races SET ${counter} = ${counter} + 1 WHERE id = ? AND registration_open = 1`)
-    .bind(raceId);
+  const series = input.participants.length === 2 ? "pair" : "single";
+  const lastColumn = `last_${series}_number`;
+  const { to } = NUMBER_RANGES[series];
+  const startSql = `MAX(races.first_${series}_number, races.${lastColumn} + 1)`;
+  // The smallest free number is the start itself or right after a taken one.
+  const nextNumberSql = `(
+    SELECT MIN(candidate) FROM (
+      SELECT ${startSql} AS candidate
+      UNION SELECT number + 1 FROM registrations WHERE race_id = races.id
+    )
+    WHERE candidate >= ${startSql} AND candidate <= ${to}
+      AND candidate NOT IN (SELECT number FROM registrations WHERE race_id = races.id)
+  )`;
   const registration = db
     .prepare(
       `INSERT INTO registrations (race_id, number, duration, attempt_id)
-       SELECT id, ${number}, ?, ? FROM races WHERE id = ? AND registration_open = 1
+       SELECT id, ${nextNumberSql}, ?, ? FROM races
+       WHERE id = ? AND registration_open = 1 AND ${nextNumberSql} IS NOT NULL
        RETURNING number`,
     )
     .bind(input.duration, input.attemptId, raceId);
+  const stored = "SELECT number FROM registrations WHERE race_id = ? AND attempt_id = ?";
+  const lastHandedOut = db
+    .prepare(`UPDATE races SET ${lastColumn} = (${stored}) WHERE id = ? AND EXISTS (${stored})`)
+    .bind(raceId, input.attemptId, raceId, raceId, input.attemptId);
   const participants = insertParticipants(db, input.participants, "race_id = ? AND attempt_id = ?", [raceId, input.attemptId]);
-  const [, inserted] = await db.batch<{ number: number }>([nextNumber, registration, ...participants]);
+  const [inserted] = await db.batch<{ number: number }>([registration, lastHandedOut, ...participants]);
   return inserted!.results[0]?.number ?? null;
 }

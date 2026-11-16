@@ -6,15 +6,18 @@ const RACE_DATE = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }
 export const RACE_YEAR = Number(RACE_DATE.slice(0, 4));
 
 /**
- * Creates a Race dated today through the admin pages, opens its Registration
+ * Creates a Race dated today through the admin pages (First numbers as given,
+ * otherwise the form's defaults), opens its Registration
  * (confirming the dialog) and returns the public link's path (/r/…). Each test
  * gets a Race of its own.
  */
-export async function newRace(page: Page, options: { open?: boolean } = {}): Promise<string> {
+export async function newRace(page: Page, options: { open?: boolean; firstSingleNumber?: number; firstPairNumber?: number } = {}): Promise<string> {
   const name = `E2E-Lauf ${Math.random().toString(36).slice(2, 8)}`;
   await page.goto("/admin");
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByLabel("Datum").fill(RACE_DATE);
+  if (options.firstSingleNumber !== undefined) await page.getByLabel("Erste Startnummer Einzeln").fill(String(options.firstSingleNumber));
+  if (options.firstPairNumber !== undefined) await page.getByLabel("Erste Startnummer Paare").fill(String(options.firstPairNumber));
   await page.getByRole("button", { name: "Lauf anlegen" }).click();
   const card = page.locator("li.card").filter({ has: page.locator(".race-name", { hasText: name }) });
   if (options.open ?? true) {

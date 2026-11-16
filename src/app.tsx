@@ -47,6 +47,8 @@ export function createApp(deps: { identity: AdminIdentity }) {
     const submitted = await submitRegistration(c.env.DB, race.id, result.input);
     // A form opened before the Admin closed Registration ends up here; the flow shows the closed message.
     if ("closed" in submitted) return c.json({ error: "registration closed" }, 409);
+    // No number left for singles or Pairs: the flow shows the same message, sending them to the Race desk.
+    if ("full" in submitted) return c.json({ error: "no number left" }, 409);
     return c.json({ number: submitted.number });
   });
 

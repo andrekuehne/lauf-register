@@ -1,18 +1,13 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { anna, ben, clara, emil, registration } from "./fixtures";
-import { asAdmin, newRace, request, setRegistration, submit } from "./http";
+import { asAdmin, newRace, numberOf, request, setRegistration, submit } from "./http";
 
 // Storage is shared by the tests in a file: start each test without Races
 // (deleting a Race also deletes its Registrations).
 beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
 });
-
-async function numberOf(res: Response): Promise<number> {
-  expect(res.status).toBe(200);
-  return ((await res.json()) as { number: number }).number;
-}
 
 describe("submitting a Registration", () => {
   it("stores a single Participant and returns Registration number 1", async () => {

@@ -53,6 +53,21 @@ describe("admin area", () => {
     expect(await publicLinks()).toEqual([]);
   });
 
+  it("offers First numbers 1 and 1001 for a new Race and refuses ones outside their range", async () => {
+    const form = await (await asAdmin("/admin")).text();
+    expect(form).toContain('name="firstSingleNumber" value="1"');
+    expect(form).toContain('name="firstPairNumber" value="1001"');
+
+    const res = await postRace({ name: "Kaputt", date: "2026-12-09", firstSingleNumber: "0", firstPairNumber: "" });
+
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain("Bitte eine Zahl von 1 bis 999 eingeben.");
+    expect(html).toContain("Bitte eine Zahl von 1000 bis 1999 eingeben.");
+    expect(html).toContain('name="firstSingleNumber" value="0"');
+    expect(await publicLinks()).toEqual([]);
+  });
+
   it("gives every Race its own random public link", async () => {
     await postRace({ name: "Lauf A", date: "2026-12-09" });
     await postRace({ name: "Lauf B", date: "2026-12-10" });

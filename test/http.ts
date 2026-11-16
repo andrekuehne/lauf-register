@@ -1,4 +1,5 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { expect } from "vitest";
 import { env } from "cloudflare:workers";
 import { createApp } from "../src/app";
 import type { AdminIdentity } from "../src/admin/identity";
@@ -54,6 +55,13 @@ export function postEdit(raceLink: string, number: number, fields: Record<string
   return postForm(editPath(raceLink, number), fields, headers);
 }
 
+/** The Race's settings page (name, date, First numbers); posting to it saves. */
+export const settingsPath = (raceLink: string) => `${adminRacePath(raceLink)}/settings`;
+
+export function postSettings(raceLink: string, fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  return postForm(settingsPath(raceLink), fields, headers);
+}
+
 /** The admin page that asks before a whole Race is deleted; posting to it deletes. */
 export const deleteRacePath = (raceLink: string) => `${adminRacePath(raceLink)}/delete`;
 
@@ -77,6 +85,12 @@ export function submit(raceLink: string, body: unknown) {
   });
 }
 
+/** The Registration number a successful submit answered with. */
+export async function numberOf(res: Response): Promise<number> {
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { number: number }).number;
+}
+
 /** Opens or closes Registration for the Race behind a public link, through the
  * admin area. A string is sent as the raw form value.
  */
@@ -95,9 +109,17 @@ export function setRegistrationOnRacePage(raceLink: string, open: boolean) {
  * starts closed; as most tests need to register, this opens it unless
  * `open: false` is passed.
  */
-export async function newRace(name: string, date = "2026-12-09", options: { open?: boolean } = {}): Promise<string> {
+export async function newRace(
+  name: string,
+  date = "2026-12-09",
+  options: { open?: boolean; firstSingleNumber?: number; firstPairNumber?: number } = {},
+): Promise<string> {
   const before = new Set(await publicLinks());
-  await postRace({ name, date });
+  const fields: Record<string, string> = { name, date };
+  if (options.firstSingleNumber !== undefined) fields.firstSingleNumber = String(options.firstSingleNumber);
+  if (options.firstPairNumber !== undefined) fields.firstPairNumber = String(options.firstPairNumber);
+  const created = await postRace(fields);
+  if (created.status !== 303) throw new Error(`Race "${name}" was not created: ${created.status}`);
   const link = (await publicLinks()).find((l) => !before.has(l));
   if (!link) throw new Error(`Race "${name}" was not created`);
   if (options.open ?? true) await setRegistration(link, true);

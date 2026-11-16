@@ -6,8 +6,8 @@ import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, raceYear } from "../races/race-dates";
 import { publicRacePath } from "../races/race-link";
-import { MAX_RACE_NAME_LENGTH, validateRaceInput, type RaceInput, type RaceInputErrors } from "../races/race-input";
-import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, type Race, type RaceListItem } from "../races/races";
+import { raceFormValues, validateRaceInput, type RaceFormValues, type RaceInputErrors } from "../races/race-input";
+import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, updateRace, type Race, type RaceListItem } from "../races/races";
 import {
   countRegistrations,
   deleteRegistration,
@@ -22,26 +22,18 @@ import { AdminPage, problemPage, registrationCount } from "./admin-page";
 import { checkEdit, editRegistrationPage, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
+import { RaceFields, raceSettingsPage } from "./race-settings-page";
 import { RegistrationToggle } from "./registration-toggle";
 import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage } from "./registrations-page";
 
 const qrStrings = strings("de").qr;
 
-function NewRaceForm(props: { values?: Partial<RaceInput>; errors?: RaceInputErrors }) {
-  const { values = {}, errors = {} } = props;
+function NewRaceForm(props: { values?: RaceFormValues; errors?: RaceInputErrors }) {
+  const { values = raceFormValues(), errors = {} } = props;
   return (
     <form method="post" action="/admin/races" class="card" novalidate>
       <h2>Neuer Lauf</h2>
-      <div class="field">
-        <label class="label" for="race-name">Name</label>
-        <input type="text" id="race-name" name="name" value={values.name ?? ""} maxlength={MAX_RACE_NAME_LENGTH} placeholder="Stundenlauf 09.12.2026" aria-invalid={errors.name ? "true" : undefined} />
-        {errors.name && <p class="error">{errors.name}</p>}
-      </div>
-      <div class="field">
-        <label class="label" for="race-date">Datum</label>
-        <input type="date" id="race-date" name="date" value={values.date ?? ""} aria-invalid={errors.date ? "true" : undefined} />
-        {errors.date && <p class="error">{errors.date}</p>}
-      </div>
+      <RaceFields values={values} errors={errors} />
       <button type="submit" class="btn">Lauf anlegen</button>
       <p class="muted form-note">Die Anmeldung ist anfangs geschlossen. Öffne sie am Lauftag in der Liste unten.</p>
     </form>
@@ -77,7 +69,7 @@ function RaceList(props: { races: RaceListItem[]; requestUrl: string }) {
   );
 }
 
-async function racesPage(c: Context<AppEnv>, form?: { values: RaceInput; errors: RaceInputErrors }) {
+async function racesPage(c: Context<AppEnv>, form?: { values: RaceFormValues; errors: RaceInputErrors }) {
   const races = await listRaces(c.env.DB);
   return c.html(
     <AdminPage url={c.req.url} admin={c.get("adminEmail")}>
@@ -140,9 +132,9 @@ export function adminRoutes(identity: AdminIdentity) {
 
   admin.post("/races", async (c) => {
     const body = await c.req.parseBody();
-    const { input, errors } = validateRaceInput(body);
-    if (Object.keys(errors).length > 0) return racesPage(c, { values: input, errors });
-    await createRace(c.env.DB, { ...input, createdBy: c.get("adminEmail") });
+    const checked = validateRaceInput(body);
+    if (!checked.ok) return racesPage(c, checked);
+    await createRace(c.env.DB, { ...checked.input, createdBy: c.get("adminEmail") });
     return c.redirect("/admin", 303);
   });
 
@@ -160,6 +152,18 @@ export function adminRoutes(identity: AdminIdentity) {
 
   admin.get("/races/:token", (c) =>
     withRace(c, async (race) => raceRegistrationsPage(c, race, await listRegistrations(c.env.DB, race.id))),
+  );
+
+  admin.get("/races/:token/settings", (c) => withRace(c, async (race) => raceSettingsPage(c, race, raceFormValues(race))));
+
+  admin.post("/races/:token/settings", (c) =>
+    withRace(c, async (race) => {
+      const checked = validateRaceInput(await c.req.parseBody());
+      if (!checked.ok) return raceSettingsPage(c, race, checked.values, checked.errors);
+      // Deleted by another Admin in the meantime: say so rather than pretend it was saved.
+      if (!(await updateRace(c.env.DB, race.id, checked.input))) return problemPage(c, RACE_NOT_FOUND, 404);
+      return c.redirect(racePath(race), 303);
+    }),
   );
 
   admin.get("/races/:token/poster", (c) => withRace(c, async (race) => posterPage(c, race)));

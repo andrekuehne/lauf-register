@@ -22,6 +22,7 @@ export const racePath = (race: Race) => `/admin/races/${race.token}`;
 export const deleteRacePath = (race: Race) => `${racePath(race)}/delete`;
 const exportPath = (race: Race) => `${racePath(race)}/export.xlsx`;
 export const posterPath = (race: Race) => `${racePath(race)}/poster`;
+export const settingsPath = (race: Race) => `${racePath(race)}/settings`;
 export const editPath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/edit`;
 const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
@@ -92,6 +93,9 @@ function RaceHeader(props: { race: Race; count: number }) {
       <p class="race-qr">
         <a href={posterPath(props.race)}>Aushang (A4) drucken</a>
         <QrButton label={qrStrings.show} race={props.race} />
+      </p>
+      <p class="race-settings">
+        <a href={settingsPath(props.race)}>Einstellungen (Name, Datum, Startnummern)</a>
       </p>
     </>
   );

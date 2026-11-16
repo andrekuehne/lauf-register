@@ -61,6 +61,22 @@ test.describe("a Registration end to end", () => {
     await expect(listed).toContainText("Männer-Paar");
   });
 
+  test("the Race's own First numbers: the first single and the first Pair get them", async ({ page, context }) => {
+    const race = await newRace(page, { firstSingleNumber: 7, firstPairNumber: 1023 });
+
+    await startRegistration(page, race, ANNA_SINGLE, anna);
+    await tapNext(page);
+    expect(await consentAndSubmit(page)).toBe("7");
+
+    // A second phone: its own flow from the start.
+    const phone = await context.newPage();
+    await startRegistration(phone, race, ["Halbstundenlauf", "Zu zweit", "Zwei Männer"], { firstName: "Ben", lastName: "Beispiel", birthYear: "1990" });
+    await tapNext(phone);
+    await fillParticipant(phone, { firstName: "Emil", lastName: "Exempel", birthYear: "1988" });
+    await tapNext(phone);
+    expect(await consentAndSubmit(phone)).toBe("1023");
+  });
+
   test("mixed Pair: the first Participant chooses a Gender, the second gets the other one", async ({ page }) => {
     const race = await newRace(page);
     await page.goto(race);
