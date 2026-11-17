@@ -67,8 +67,13 @@ The number shown on a Registration's confirmation screen and read out at the rac
 _Avoid_: Bib (the physical number a Participant wears)
 _German (UI)_: Startnummer
 
+**Series**:
+The Registration numbers of a Race's Singles, or those of its Pairs. Each series has its own range (1–999 and 1000–1999), its own First number and its own count; a Registration's series follows from whether it is single or a Pair.
+_Avoid_: Range (the numbers a series may use), block
+_German (UI)_: named after its Registrations: Einzelne, Paare
+
 **First number**:
-Where a Race's singles or its Pairs start counting Registration numbers, within their range; set per Race by an Admin (by default 1 for singles, 1001 for Pairs).
+Where a series starts counting Registration numbers, within its range; set per Race by an Admin (by default 1 for singles, 1001 for Pairs).
 _Avoid_: Start number, offset
 
 **Next number**:
