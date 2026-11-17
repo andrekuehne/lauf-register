@@ -199,6 +199,8 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
             <p class="alert" id="offline" role="alert" hidden>{t.offline}</p>
             <p class="alert" id="rejected" role="alert" hidden>{t.rejected}</p>
             <p class="alert" id="closed" role="alert" hidden>{t.closed}</p>
+            <p class="alert" id="full-single" role="alert" hidden>{t.fullSingle}</p>
+            <p class="alert" id="full-pair" role="alert" hidden>{t.fullPair}</p>
             <button type="submit" class="btn" id="submit">{t.submit}</button>
           </form>
           <button type="button" class="back" data-back>{t.back}</button>

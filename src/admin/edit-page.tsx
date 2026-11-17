@@ -12,7 +12,7 @@ import type { Race } from "../races/races";
 import { validateRegistrationEdit, type RegistrationContent, type RegistrationIssue } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
 import { AdminPage } from "./admin-page";
-import { editPath, participantNames, racePath } from "./registrations-page";
+import { editPath, participantNames, racePath, SERIES_NAMES } from "./registrations-page";
 
 const t = strings("de").flow;
 
@@ -77,7 +77,7 @@ export function checkEdit(values: EditValues, registration: StoredRegistration, 
   const number = numberInRange(values.number, series);
   if (number === null) {
     const { from, to } = NUMBER_RANGES[series];
-    errors.number = `${series === "pair" ? "Paare" : "Einzelne"} haben Startnummern von ${from} bis ${to}.`;
+    errors.number = `${SERIES_NAMES[series]} haben Startnummern von ${from} bis ${to}.`;
   }
   if (!result.ok) {
     for (const issue of result.issues) Object.assign(errors, germanError(issue, values, year));

@@ -63,7 +63,7 @@ _Avoid_: Couple, team
 _German (UI)_: Zu zweit (choice), Paar
 
 **Registration number**:
-The number shown on a Registration's confirmation screen and read out at the race desk; it is also the start number in the results software. Unique within a Race. Singles are numbered within 1–999 and Pairs within 1000–1999; each counts up from its own First number, skipping Reserved numbers, numbers already taken and Previous numbers; a number once handed out is never handed out again automatically. An Admin may change it by hand to any number of its range that is neither taken in the Race nor Reserved, including one freed by deleting a Registration, or a Previous number.
+The number shown on a Registration's confirmation screen and read out at the race desk; it is also the start number in the results software. Unique within a Race. Singles are numbered within 1–999 and Pairs within 1000–1999; each counts up from its own First number, skipping Reserved numbers, numbers already taken and Previous numbers; a number once handed out is never handed out again automatically, unless an Admin sets the series' Next number back over it. An Admin may change it by hand to any number of its range that is neither taken in the Race nor Reserved, including one freed by deleting a Registration, or a Previous number.
 _Avoid_: Bib (the physical number a Participant wears)
 _German (UI)_: Startnummer
 
@@ -71,8 +71,12 @@ _German (UI)_: Startnummer
 Where a Race's singles or its Pairs start counting Registration numbers, within their range; set per Race by an Admin (by default 1 for singles, 1001 for Pairs).
 _Avoid_: Start number, offset
 
+**Next number**:
+Where a series' count continues: the number it hands out next, unless that number is taken, Reserved or a Previous number. An Admin can set it to skip ahead, or to go back, e.g. when a series has no number left; going back over free numbers asks first, as they may have belonged to a deleted Registration whose bib is out. Never below the series' First number.
+_German (UI)_: nächste Startnummer
+
 **Reserved number**:
-A Registration number an Admin has kept out of a Race altogether, typically because its bib got lost: it is never a Registration's number, neither by the automatic count nor by hand. Reserving a number a Registration already has gives that Registration a new one. Once no longer Reserved, the number is free for an Admin to give by hand, and for the count only if the count has not passed it yet.
+A Registration number an Admin has kept out of a Race altogether, typically because its bib got lost: it is never a Registration's number, neither by the automatic count nor by hand. Reserving a number a Registration already has gives that Registration a new one. Once no longer Reserved, the number is free for an Admin to give by hand, and for the count only if the count has not passed it yet (or an Admin sets the Next number back over it).
 _Avoid_: Excluded, blocked, skipped number
 _German (UI)_: gesperrte Startnummer
 

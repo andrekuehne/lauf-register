@@ -20,7 +20,7 @@ import {
   type Title,
 } from "../domain/categories";
 import { ageInRaceYear, birthYearError, isImplausibleBirthYear, parseBirthYear } from "../domain/participant-checks";
-import { FLOW_CONFIG_ID, type FlowConfig, type ParticipantName, type SubmitAnswer } from "../registration/flow-config";
+import { FLOW_CONFIG_ID, SUBMIT_ERRORS, type FlowConfig, type ParticipantName, type SubmitAnswer } from "../registration/flow-config";
 import { fill } from "../shared/fill";
 import { divisionIconSvg } from "../ui/icon-svgs";
 
@@ -486,9 +486,12 @@ function renderDone() {
 
 // ---------- submit ----------
 
-/** "No connection", "didn't go through" and "closed": at most one shows, after a submit. */
+/** The answers to a refused submit: "didn't go through", "closed" and "no number left" (singles, Pairs). */
+const REFUSED_ALERTS = ["rejected", "closed", "full-single", "full-pair"];
+
+/** "No connection" and the refused ones: at most one shows, after a submit. */
 function hideSubmitAlerts() {
-  ["offline", "rejected", "closed"].forEach((id) => show(byId(id), false));
+  ["offline", ...REFUSED_ALERTS].forEach((id) => show(byId(id), false));
 }
 
 function setSending(sending: boolean) {
@@ -506,8 +509,8 @@ async function submit() {
     show(byId("consent-error"), true);
     return;
   }
-  show(byId("rejected"), false);
-  show(byId("closed"), false);
+  // „No connection“ stays until the answer: the button says „Erneut senden“ meanwhile.
+  REFUSED_ALERTS.forEach((id) => show(byId(id), false));
   setSending(true);
   const slotGender = genders();
   const payload = {
@@ -543,8 +546,10 @@ async function submit() {
       // An answer the flow can't read (e.g. from another version during a deploy): sending again answers with the stored Registration.
       show(byId("offline"), true);
     } else if (response.status === 409) {
-      // The Admin closed Registration after this form was opened.
-      show(byId("closed"), true);
+      // The series has no number left, or the Admin closed Registration after this form was opened.
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      const full = body !== null && body.error === SUBMIT_ERRORS.full;
+      show(byId(full ? (isPair() ? "full-pair" : "full-single") : "closed"), true);
     } else {
       show(byId("rejected"), true);
     }

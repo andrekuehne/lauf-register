@@ -6,6 +6,7 @@ import { language, type AppEnv } from "./language";
 import { Layout } from "./layout";
 import { raceYear } from "./races/race-dates";
 import { findRaceByToken } from "./races/races";
+import { SUBMIT_ERRORS } from "./registration/flow-config";
 import { raceNotFoundPage, registrationClosedPage, registrationPage } from "./registration/page";
 import { validateRegistrationInput } from "./registration/registration-input";
 import { submitRegistration } from "./registration/registrations";
@@ -41,14 +42,14 @@ export function createApp(deps: { identity: AdminIdentity }) {
     const body = await c.req.json().catch(() => undefined);
     const result = validateRegistrationInput(body, raceYear(race));
     if (!result.ok) {
-      if (!race.registrationOpen) return c.json({ error: "registration closed" }, 409);
+      if (!race.registrationOpen) return c.json({ error: SUBMIT_ERRORS.closed }, 409);
       return c.json({ error: "invalid registration", issues: result.issues }, 400);
     }
     const submitted = await submitRegistration(c.env.DB, race.id, result.input);
     // A form opened before the Admin closed Registration ends up here; the flow shows the closed message.
-    if ("closed" in submitted) return c.json({ error: "registration closed" }, 409);
-    // No number left for singles or Pairs: the flow shows the same message, sending them to the Race desk.
-    if ("full" in submitted) return c.json({ error: "no number left" }, 409);
+    if ("closed" in submitted) return c.json({ error: SUBMIT_ERRORS.closed }, 409);
+    // No number left for singles or Pairs: the flow shows a message of its own, sending them to the Race desk.
+    if ("full" in submitted) return c.json({ error: SUBMIT_ERRORS.full }, 409);
     return c.json(submitted.answer);
   });
 

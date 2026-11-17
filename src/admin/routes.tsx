@@ -7,6 +7,7 @@ import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, raceYear } from "../races/race-dates";
 import { publicRacePath } from "../races/race-link";
+import { checkNextNumbers, postedNextNumbers } from "../races/next-number-input";
 import { raceFormValues, validateRaceInput, type RaceFormValues, type RaceInputErrors } from "../races/race-input";
 import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, updateRace, type Race, type RaceListItem } from "../races/races";
 import {
@@ -17,6 +18,7 @@ import {
   updateRegistration,
   type StoredRegistration,
 } from "../registration/registrations";
+import { nextNumbers, numbersLeft, setNextNumbers } from "../registration/next-numbers";
 import { listReservedNumbers, removeReservedNumbers, reserveNumbers } from "../registration/reserved-numbers";
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
@@ -24,9 +26,16 @@ import { AdminPage, problemPage, registrationCount } from "./admin-page";
 import { checkEdit, editRegistrationPage, numberReservedError, numberTakenError, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
-import { confirmedRegistrations, RaceFields, raceSettingsPage, reservedSectionPath, type ReservedSectionState } from "./race-settings-page";
+import {
+  confirmedRegistrations,
+  RaceFields,
+  raceSettingsPage,
+  reservedSectionPath,
+  type NextNumbersSectionState,
+  type ReservedSectionState,
+} from "./race-settings-page";
 import { RegistrationToggle } from "./registration-toggle";
-import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage, settingsPath } from "./registrations-page";
+import { deleteRacePage, deleteRegistrationPage, nextNumbersSectionPath, racePath, raceRegistrationsPage, settingsPath } from "./registrations-page";
 
 const qrStrings = strings("de").qr;
 
@@ -112,18 +121,24 @@ function withRegistration(c: Context<AppEnv>, then: (race: Race, registration: S
 const isFormFor = (form: Record<string, unknown>, registration: StoredRegistration) => form.registration === String(registration.id);
 
 /**
- * The Race settings page with its Reserved numbers as stored; `reserved` adds
- * what the section shows besides them, `form` the Race form's posted values
- * and errors (otherwise the stored values).
+ * The Race settings page with its Next numbers and Reserved numbers as stored;
+ * `next` and `reserved` add what those sections show besides them, `form` the
+ * Race form's posted values and errors (otherwise the stored values).
  */
 async function settingsPage(
   c: Context<AppEnv>,
   race: Race,
-  reserved: Omit<ReservedSectionState, "numbers"> = {},
-  form: { values: RaceFormValues; errors: RaceInputErrors } = { values: raceFormValues(race), errors: {} },
+  shows: {
+    form?: { values: RaceFormValues; errors: RaceInputErrors };
+    next?: Omit<NextNumbersSectionState, "next">;
+    reserved?: Omit<ReservedSectionState, "numbers">;
+  } = {},
 ) {
-  const numbers = await listReservedNumbers(c.env.DB, race.id);
-  return raceSettingsPage(c, race, form.values, form.errors, { ...reserved, numbers });
+  const { form = { values: raceFormValues(race), errors: {} } } = shows;
+  const [next, numbers] = await Promise.all([nextNumbers(c.env.DB, race.id), listReservedNumbers(c.env.DB, race.id)]);
+  // Deleted by another Admin in the meantime.
+  if (!next) return problemPage(c, RACE_NOT_FOUND, 404);
+  return raceSettingsPage(c, race, form.values, form.errors, { ...shows.next, next }, { ...shows.reserved, numbers });
 }
 
 /** Runs `then` with the Race named by the URL's token, or answers 404. */
@@ -176,7 +191,12 @@ export function adminRoutes(identity: AdminIdentity) {
   );
 
   admin.get("/races/:token", (c) =>
-    withRace(c, async (race) => raceRegistrationsPage(c, race, await listRegistrations(c.env.DB, race.id))),
+    withRace(c, async (race) => {
+      const [registrations, left] = await Promise.all([listRegistrations(c.env.DB, race.id), numbersLeft(c.env.DB, race.id)]);
+      // Deleted by another Admin in the meantime.
+      if (!left) return problemPage(c, RACE_NOT_FOUND, 404);
+      return raceRegistrationsPage(c, race, registrations, left);
+    }),
   );
 
   admin.get("/races/:token/settings", (c) => withRace(c, async (race) => settingsPage(c, race)));
@@ -184,10 +204,25 @@ export function adminRoutes(identity: AdminIdentity) {
   admin.post("/races/:token/settings", (c) =>
     withRace(c, async (race) => {
       const checked = validateRaceInput(await c.req.parseBody());
-      if (!checked.ok) return settingsPage(c, race, {}, checked);
+      if (!checked.ok) return settingsPage(c, race, { form: checked });
       // Deleted by another Admin in the meantime: say so rather than pretend it was saved.
       if (!(await updateRace(c.env.DB, race.id, checked.input))) return problemPage(c, RACE_NOT_FOUND, 404);
       return c.redirect(racePath(race), 303);
+    }),
+  );
+
+  admin.post("/races/:token/next-numbers", (c) =>
+    withRace(c, async (race) => {
+      const posted = postedNextNumbers(await c.req.parseBody());
+      // The fields as posted, shown again with an error or a question.
+      const asPosted = { typed: posted.typed, shown: posted.shown };
+      const checked = checkNextNumbers(posted, race);
+      if (!checked.ok) return settingsPage(c, race, { next: { ...asPosted, errors: checked.errors } });
+      // Asks first when a series would go back over free numbers, and again when those changed since the Admin was asked.
+      const result = await setNextNumbers(c.env.DB, race.id, checked.changed, posted.confirmed);
+      if ("toConfirm" in result) return settingsPage(c, race, { next: { ...asPosted, toConfirm: result.toConfirm } });
+      if (!result.saved) return problemPage(c, RACE_NOT_FOUND, 404);
+      return c.redirect(nextNumbersSectionPath(race), 303);
     }),
   );
 
@@ -196,14 +231,14 @@ export function adminRoutes(identity: AdminIdentity) {
       const { numbers, confirmed } = await c.req.parseBody();
       const typed = typeof numbers === "string" ? numbers : "";
       const parsed = parseReservedRange(typed);
-      if (!parsed.ok) return settingsPage(c, race, { typed, error: parsed.error });
+      if (!parsed.ok) return settingsPage(c, race, { reserved: { typed, error: parsed.error } });
       // Asks first, and again when the Registrations on the range changed since the Admin was asked.
       const result = await reserveNumbers(c.env.DB, race.id, parsed, confirmedRegistrations(confirmed));
-      if ("toConfirm" in result) return settingsPage(c, race, { typed, toConfirm: result.toConfirm });
-      if ("noNumberLeft" in result) return settingsPage(c, race, { typed, error: NO_NUMBER_LEFT });
+      if ("toConfirm" in result) return settingsPage(c, race, { reserved: { typed, toConfirm: result.toConfirm } });
+      if ("noNumberLeft" in result) return settingsPage(c, race, { reserved: { typed, error: NO_NUMBER_LEFT } });
       if (result.moves.length === 0) return c.redirect(reservedSectionPath(race), 303);
       // Shown right away rather than after a redirect: the desk needs these lines to hand out the new bibs.
-      return settingsPage(c, race, { moves: result.moves });
+      return settingsPage(c, race, { reserved: { moves: result.moves } });
     }),
   );
 

@@ -2,9 +2,10 @@
 // listing a Race's Registrations, and editing or deleting one.
 
 import type { Duration, SingleOrPair } from "../domain/categories";
-import { NUMBER_RANGES, seriesOf } from "../domain/numbers";
+import { seriesOf } from "../domain/numbers";
 import type { ReservedRange } from "../domain/reserved-numbers";
 import type { SubmitAnswer } from "./flow-config";
+import { lastNumberColumn, nextNumberSql } from "./next-numbers";
 import { divisionOfRegistration, type ParticipantInput, type RegistrationContent, type RegistrationInput } from "./registration-input";
 
 /** A Registration as stored: its Participants in entered order. */
@@ -220,8 +221,9 @@ function insertParticipants(db: D1Database, participants: ParticipantInput[], wh
 /**
  * Deletes a Registration, found by its id; its Participants and Previous
  * numbers go with it (ON DELETE CASCADE). The count gives its number out again
- * only if it hasn't got there yet (a number given by hand). False when the
- * Race has no such Registration.
+ * only if it hasn't got there yet (a number given by hand), or after an Admin
+ * sends it back over it (see setNextNumbers). False when the Race has no such
+ * Registration.
  */
 export async function deleteRegistration(db: D1Database, raceId: number, registrationId: number): Promise<boolean> {
   const result = await db.prepare("DELETE FROM registrations WHERE race_id = ? AND id = ?").bind(raceId, registrationId).run();
@@ -254,45 +256,9 @@ function answerFor(number: number, stored: RegistrationContent, differs: boolean
   };
 }
 
-/** The column holding the number a Race's series handed out last (0: none yet). */
-const lastNumberColumn = (series: SingleOrPair) => `last_${series}_number`;
-
-/** SQL for the Previous numbers of the Registrations in the Race of the enclosing query's `races` row. */
-const PREVIOUS_NUMBERS_OF_RACE = `
-  SELECT p.number FROM previous_numbers p JOIN registrations r ON r.id = p.registration_id WHERE r.race_id = races.id`;
-
-/**
- * SQL for the next automatic number of a series in the Race of the enclosing
- * query's `races` row, NULL when there is none: the smallest number that is at
- * least the series' First number, above the number it handed out last, within
- * its range, not taken in the Race, not Reserved and not a Previous number (a
- * confirmation screen may still show it). With `beingReserved`, also
- * outside a range about to be Reserved, whose last, first and last number the
- * SQL then takes as parameters, in that order.
- */
-function nextNumberSql(series: SingleOrPair, beingReserved = false): string {
-  const { to } = NUMBER_RANGES[series];
-  const startSql = `MAX(races.first_${series}_number, races.${lastNumberColumn(series)} + 1)`;
-  // The smallest free number is the start itself or right after a taken, Reserved or Previous one, or the range about to be.
-  return `(
-    SELECT MIN(candidate) FROM (
-      SELECT ${startSql} AS candidate
-      UNION SELECT number + 1 FROM registrations WHERE race_id = races.id
-      UNION SELECT number + 1 FROM reserved_numbers WHERE race_id = races.id
-      UNION SELECT number + 1 FROM (${PREVIOUS_NUMBERS_OF_RACE})
-      ${beingReserved ? "UNION SELECT ? + 1" : ""}
-    )
-    WHERE candidate >= ${startSql} AND candidate <= ${to}
-      AND candidate NOT IN (SELECT number FROM registrations WHERE race_id = races.id)
-      AND candidate NOT IN (SELECT number FROM reserved_numbers WHERE race_id = races.id)
-      AND candidate NOT IN (${PREVIOUS_NUMBERS_OF_RACE})
-      ${beingReserved ? "AND candidate NOT BETWEEN ? AND ?" : ""}
-  )`;
-}
-
 /**
  * One transaction: store the Registration with the next number of its series
- * (singles or Pairs, see `nextNumberSql`), note that number as the series'
+ * (singles or Pairs, see `nextNumberSql` in next-numbers.ts), note that number as the series'
  * last one handed out, then store the Participants. If any step fails (e.g.
  * the attempt ID is already stored), nothing is kept, the last handed-out
  * number included. When there is no next number, nothing is stored.

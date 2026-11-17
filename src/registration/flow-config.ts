@@ -19,6 +19,14 @@ export type SubmitAnswer = {
   differs: boolean;
 };
 
+/** The `error` of a refused submit (409) that the flow tells apart. */
+export const SUBMIT_ERRORS = {
+  /** The Admin closed Registration (also after the form was opened). */
+  closed: "registration closed",
+  /** The Registration's series (singles or Pairs) has no number left. */
+  full: "no number left",
+} as const;
+
 /** Handed from the server-rendered page to the browser flow as JSON. */
 export type FlowConfig = {
   submitUrl: string;

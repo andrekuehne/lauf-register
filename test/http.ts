@@ -3,6 +3,7 @@ import { expect } from "vitest";
 import { env } from "cloudflare:workers";
 import { createApp } from "../src/app";
 import type { AdminIdentity } from "../src/admin/identity";
+import { formFields } from "./admin-html";
 
 // The one allowed test double: the admin identity. A request is "signed in"
 // as whatever email the x-test-admin header names; without it, it's anonymous.
@@ -112,6 +113,24 @@ export function postReserve(raceLink: string, numbers: string, confirmed?: strin
 export function postUnreserve(raceLink: string, from: number, to: number, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
   return postForm(`${adminRacePath(raceLink)}/reserved/remove`, { from: String(from), to: String(to) }, headers);
 }
+
+/** Where the „Nächste Startnummern“ form on the Race settings page posts to. */
+export const nextNumbersPath = (raceLink: string) => `${adminRacePath(raceLink)}/next-numbers`;
+
+/** The „Nächste Startnummern“ form's fields as an Admin opens the settings page now. */
+export async function nextNumbersForm(raceLink: string): Promise<Record<string, string>> {
+  const fields = formFields(await (await asAdmin(settingsPath(raceLink))).text(), "next-numbers");
+  if (!fields) throw new Error("The settings page has no „Nächste Startnummern“ form");
+  return fields;
+}
+
+/** Posts the „Nächste Startnummern“ form (or its confirmation) with exactly these fields. */
+export function postNextNumbers(raceLink: string, fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  return postForm(nextNumbersPath(raceLink), fields, headers);
+}
+
+/** The confirmation an Admin is asked for before the count goes back over free numbers, as its form sends it; none when nothing is asked. */
+export const nextNumbersConfirmationOn = (html: string) => formFields(html, "next-confirm-form");
 
 /** The admin page that asks before a whole Race is deleted; posting to it deletes. */
 export const deleteRacePath = (raceLink: string) => `${adminRacePath(raceLink)}/delete`;

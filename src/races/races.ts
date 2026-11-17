@@ -3,6 +3,7 @@
 // Registrations and their Participants with it (ON DELETE CASCADE): a hard
 // delete, no undo.
 
+import type { SingleOrPair } from "../domain/categories";
 import type { RaceInput } from "./race-input";
 
 export type Race = {
@@ -21,6 +22,9 @@ export type Race = {
 };
 
 export type RaceListItem = Race & { registrationCount: number };
+
+/** Where the Race's singles or its Pairs start counting. */
+export const firstNumberOf = (race: Race, series: SingleOrPair) => (series === "single" ? race.firstSingleNumber : race.firstPairNumber);
 
 type RaceRow = {
   id: number;

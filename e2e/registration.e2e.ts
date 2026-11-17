@@ -2,13 +2,14 @@
 // the real Worker and local D1: what a Participant does on race day, and what
 // the Admin then sees.
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   adminRegistration,
   consentAndSubmit,
   currentStep,
   fillParticipant,
   newRace,
+  raceCard,
   RACE_YEAR,
   startRegistration,
   stepHeading,
@@ -101,6 +102,62 @@ test.describe("a Registration end to end", () => {
     const listed = await adminRegistration(page, race, number);
     await expect(listed).toContainText("Ben Beispiel · m");
     await expect(listed).toContainText("Clara Probe · w");
+  });
+});
+
+test.describe("no number left", () => {
+  /** Consent and „Jetzt anmelden“ on the Check screen, without waiting for the Done screen. */
+  async function trySubmit(phone: Page) {
+    await currentStep(phone).getByRole("checkbox").check();
+    await currentStep(phone).getByRole("button", { name: "Jetzt anmelden" }).tap();
+  }
+
+  /** On the Done screen: „Weitere Person anmelden“, so the same phone registers the next one. */
+  async function another(phone: Page) {
+    await currentStep(phone).getByRole("button", { name: "Weitere Person anmelden" }).tap();
+    await expect(currentStep(phone)).toHaveAttribute("data-step", "duration");
+  }
+
+  test("for singles the phone says so and sends them to the desk; once closed, it says closed", async ({ page }) => {
+    const race = await newRace(page, { firstSingleNumber: 999 });
+    const phone = await page.context().newPage();
+    await startRegistration(phone, race, ANNA_SINGLE, anna);
+    await tapNext(phone);
+    expect(await consentAndSubmit(phone)).toBe("999");
+    await another(phone);
+    await startRegistration(phone, race, ANNA_SINGLE, { ...anna, firstName: "Erika" });
+    await tapNext(phone);
+
+    await trySubmit(phone);
+    await expect(currentStep(phone).getByRole("alert")).toHaveText(
+      "Online sind für Einzelne keine Startnummern mehr frei. Bitte melde dich am Anmeldetisch.",
+    );
+
+    // The Admin closes Registration; the phone tries once more.
+    await page.goto("/admin");
+    page.once("dialog", (dialog) => dialog.accept());
+    await raceCard(page, race).getByRole("button", { name: "Geschlossen" }).click();
+    await expect(raceCard(page, race).getByRole("button", { name: "Geschlossen", pressed: true })).toBeVisible();
+    await currentStep(phone).getByRole("button", { name: "Jetzt anmelden" }).tap();
+    await expect(currentStep(phone).getByRole("alert")).toHaveText("Die Online-Anmeldung ist inzwischen geschlossen. Bitte melde dich am Anmeldetisch.");
+  });
+
+  test("for Pairs the phone says so in the plural", async ({ page }) => {
+    const race = await newRace(page, { firstPairNumber: 1999 });
+    const enterPair = async () => {
+      await startRegistration(page, race, ["Halbstundenlauf", "Zu zweit", "Zwei Männer"], { firstName: "Ben", lastName: "Beispiel", birthYear: "1990" });
+      await tapNext(page);
+      await fillParticipant(page, { firstName: "Emil", lastName: "Exempel", birthYear: "1988" });
+      await tapNext(page);
+    };
+    await enterPair();
+    expect(await consentAndSubmit(page)).toBe("1999");
+    await another(page);
+    await enterPair();
+
+    await trySubmit(page);
+
+    await expect(currentStep(page).getByRole("alert")).toHaveText("Online sind für Paare keine Startnummern mehr frei. Bitte meldet euch am Anmeldetisch.");
   });
 });
 

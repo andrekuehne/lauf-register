@@ -1,7 +1,7 @@
 // The admin page of one Race (its Registrations) and the delete confirmation.
 
 import type { Context } from "hono";
-import { DIVISIONS, GENDER_LETTER, type Duration } from "../domain/categories";
+import { DIVISIONS, GENDER_LETTER, SINGLE_OR_PAIR, type Duration, type SingleOrPair } from "../domain/categories";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, formatRegistrationTime } from "../races/race-dates";
@@ -23,6 +23,14 @@ export const deleteRacePath = (race: Race) => `${racePath(race)}/delete`;
 const exportPath = (race: Race) => `${racePath(race)}/export.xlsx`;
 export const posterPath = (race: Race) => `${racePath(race)}/poster`;
 export const settingsPath = (race: Race) => `${racePath(race)}/settings`;
+/** The settings page opened at the Next numbers section. */
+export const nextNumbersSectionPath = (race: Race) => `${settingsPath(race)}#next`;
+
+/** Series as the admin pages' notices name them. */
+export const SERIES_NAMES: Record<SingleOrPair, string> = { single: "Einzelne", pair: "Paare" };
+
+/** Below this many numbers left in a series, the Race page warns: with 1–10 registering at once, a few minutes' notice. */
+const FEW_NUMBERS_LEFT = 20;
 export const editPath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/edit`;
 const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
@@ -82,6 +90,26 @@ function RegistrationCard(props: {
   );
 }
 
+/** A warning for each series with few or no numbers left; nothing while both have plenty. */
+function NumbersLeftNotice(props: { race: Race; left: Record<SingleOrPair, number> }) {
+  const low = SINGLE_OR_PAIR.filter((series) => props.left[series] < FEW_NUMBERS_LEFT);
+  if (low.length === 0) return null;
+  return (
+    <div class="alert numbers-left" role="status">
+      {low.map((series) => {
+        const left = props.left[series];
+        if (left > 0) return <p>{`${SERIES_NAMES[series]}: noch ${left} ${left === 1 ? "Startnummer" : "Startnummern"} frei.`}</p>;
+        return (
+          <p>
+            {`${SERIES_NAMES[series]}: keine Startnummer mehr frei. Neue Anmeldungen werden abgelehnt. `}
+            <a href={nextNumbersSectionPath(props.race)}>Nächste Startnummer setzen</a>
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 function RaceHeader(props: { race: Race; count: number }) {
   return (
     <>
@@ -108,9 +136,10 @@ function RaceHeader(props: { race: Race; count: number }) {
 /**
  * All Registrations of the Race, grouped by Duration and then Division (empty
  * groups left out), in number order within a group; possible duplicates are
- * flagged across all groups.
+ * flagged across all groups. Above them, a warning when a series has few
+ * numbers `left`.
  */
-export function raceRegistrationsPage(c: Context<AppEnv>, race: Race, registrations: StoredRegistration[]) {
+export function raceRegistrationsPage(c: Context<AppEnv>, race: Race, registrations: StoredRegistration[], left: Record<SingleOrPair, number>) {
   const duplicates = duplicatesOf(registrations);
   const groups = DURATION_ORDER.map((duration) => {
     const ofDuration = registrations.filter((r) => r.duration === duration);
@@ -123,6 +152,7 @@ export function raceRegistrationsPage(c: Context<AppEnv>, race: Race, registrati
   return c.html(
     <AdminPage url={c.req.url} title={race.name} admin={c.get("adminEmail")}>
       <RaceHeader race={race} count={registrations.length} />
+      <NumbersLeftNotice race={race} left={left} />
       {registrations.length === 0 && <p class="muted">Noch keine Anmeldungen.</p>}
       {groups.map((group) => (
         <section class="reg-duration">

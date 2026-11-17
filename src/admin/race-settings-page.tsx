@@ -1,40 +1,59 @@
 // The Race settings page, and the Race form's fields (name, date, First numbers)
 // it shares with "Neuer Lauf" on the admin start page. Below the form, the
-// Race's Reserved numbers, added and removed right away (not with „Speichern“).
+// Race's Next numbers and its Reserved numbers, each changed right away (not
+// with „Speichern“).
 
 import type { Context } from "hono";
 import { raw } from "hono/html";
+import { SINGLE_OR_PAIR, type SingleOrPair } from "../domain/categories";
 import { FIRST_NUMBER_FIELDS, NUMBER_RANGES, type FirstNumberField } from "../domain/numbers";
 import { formatRange, reservedRanges } from "../domain/reserved-numbers";
 import { ICONS } from "../ui/icon-svgs";
 import type { AppEnv } from "../language";
+import { NEXT_NUMBER_FIELDS, type PerSeries } from "../races/next-number-input";
 import { MAX_RACE_NAME_LENGTH, type RaceFormValues, type RaceInputErrors } from "../races/race-input";
-import type { Race } from "../races/races";
+import { firstNumberOf, type Race } from "../races/races";
+import type { NextNumbers } from "../registration/next-numbers";
 import type { StoredRegistration } from "../registration/registrations";
 import type { Move } from "../registration/reserved-numbers";
 import { AdminPage } from "./admin-page";
-import { participantNames, racePath, settingsPath } from "./registrations-page";
+import { nextNumbersSectionPath, participantNames, racePath, SERIES_NAMES, settingsPath } from "./registrations-page";
 
-function FirstNumberInput(props: { name: FirstNumberField; label: string; values: RaceFormValues; errors: RaceInputErrors }) {
-  const { from, to } = NUMBER_RANGES[FIRST_NUMBER_FIELDS[props.name]];
-  const error = props.errors[props.name];
+/** A Registration number field of a series: the number, the numbers allowed below it (with `note` before them), and any error. */
+function NumberField(props: { id: string; name: string; label: string; value: string; from: number; series: SingleOrPair; note?: string; error?: string }) {
+  const { to } = NUMBER_RANGES[props.series];
   return (
     <div class="field">
-      <label class="label" for={`race-${props.name}`}>{props.label}</label>
+      <label class="label" for={props.id}>{props.label}</label>
       <input
         type="text"
-        id={`race-${props.name}`}
+        id={props.id}
         name={props.name}
-        value={props.values[props.name]}
+        value={props.value}
         class="year"
         inputmode="numeric"
         maxlength={String(to).length}
         autocomplete="off"
-        aria-invalid={error ? "true" : undefined}
+        aria-invalid={props.error ? "true" : undefined}
       />
-      <p class="muted form-note">{`${from}–${to}`}</p>
-      {error && <p class="error">{error}</p>}
+      <p class="muted form-note">{`${props.note ?? ""}${props.from}–${to}`}</p>
+      {props.error && <p class="error">{props.error}</p>}
     </div>
+  );
+}
+
+function FirstNumberInput(props: { name: FirstNumberField; label: string; values: RaceFormValues; errors: RaceInputErrors }) {
+  const series = FIRST_NUMBER_FIELDS[props.name];
+  return (
+    <NumberField
+      id={`race-${props.name}`}
+      name={props.name}
+      label={props.label}
+      value={props.values[props.name]}
+      from={NUMBER_RANGES[series].from}
+      series={series}
+      error={props.errors[props.name]}
+    />
   );
 }
 
@@ -55,6 +74,86 @@ export function RaceFields(props: { values: RaceFormValues; errors: RaceInputErr
       <FirstNumberInput name="firstSingleNumber" label="Erste Startnummer Einzeln" values={values} errors={errors} />
       <FirstNumberInput name="firstPairNumber" label="Erste Startnummer Paare" values={values} errors={errors} />
     </>
+  );
+}
+
+/** What the „Nächste Startnummern“ section shows. */
+export type NextNumbersSectionState = {
+  /** Where each series' count continues now. */
+  next: NextNumbers;
+  /** What the Admin typed, when it is shown again (otherwise the Next numbers). */
+  typed?: Record<SingleOrPair, string>;
+  /** What the fields showed when the page was opened: a field still showing it leaves its series alone. */
+  shown?: Record<SingleOrPair, string>;
+  errors?: PerSeries<string>;
+  /** Series whose count would go back over free numbers: those numbers, for the Admin to confirm first. */
+  toConfirm?: PerSeries<string>;
+};
+
+/** Series as the field labels name them, like the First numbers'. */
+const SERIES_LABELS: Record<SingleOrPair, string> = { single: "Einzeln", pair: "Paare" };
+
+/** Where the „Nächste Startnummern“ form posts to. */
+export const nextNumbersPath = (race: Race) => `${racePath(race)}/next-numbers`;
+
+/** A Next number as its field shows it: empty when the series has none left. */
+const asField = (next: number | null) => (next === null ? "" : String(next));
+
+/** „Nächste Startnummern“: where each series' count continues, set right away (not with „Speichern“). */
+function NextNumbersSection(props: { race: Race; state: NextNumbersSectionState }) {
+  const { race, state } = props;
+  const action = `${nextNumbersPath(race)}#next`;
+  const typed = (series: SingleOrPair) => state.typed?.[series] ?? asField(state.next[series]);
+  const shown = (series: SingleOrPair) => state.shown?.[series] ?? asField(state.next[series]);
+  const toConfirm = SINGLE_OR_PAIR.filter((series) => state.toConfirm?.[series] !== undefined);
+  return (
+    <section class="card" id="next">
+      <h2>Nächste Startnummern</h2>
+      <p class="muted form-note">
+        Hier zählen neue Anmeldungen weiter. Vergebene und gesperrte Startnummern werden übersprungen, ebenso die alten Startnummern
+        umnummerierter Anmeldungen („vorher …“).
+      </p>
+      {toConfirm.length > 0 && (
+        <div class="alert next-confirm" role="alert">
+          <p><b>Diese Startnummern sind frei und werden wieder vergeben:</b></p>
+          <ul class="moves">
+            {toConfirm.map((series) => <li>{`${SERIES_NAMES[series]}: ${state.toConfirm?.[series]}`}</li>)}
+          </ul>
+          <p>Ist eine davon schon ausgegeben, bitte vorher sperren.</p>
+          <form method="post" action={action} class="next-confirm-form">
+            {SINGLE_OR_PAIR.map((series) => (
+              <>
+                <input type="hidden" name={NEXT_NUMBER_FIELDS[series].typed} value={typed(series)} />
+                <input type="hidden" name={NEXT_NUMBER_FIELDS[series].shown} value={shown(series)} />
+                {state.toConfirm?.[series] !== undefined && (
+                  <input type="hidden" name={NEXT_NUMBER_FIELDS[series].confirmed} value={state.toConfirm[series]} />
+                )}
+              </>
+            ))}
+            <button type="submit" class="btn">Trotzdem übernehmen</button>
+          </form>
+          <p class="cancel"><a href={nextNumbersSectionPath(race)}>Abbrechen</a></p>
+        </div>
+      )}
+      <form method="post" action={action} class="next-numbers" novalidate>
+        {SINGLE_OR_PAIR.map((series) => (
+          <>
+            <NumberField
+              id={`next-${series}`}
+              name={NEXT_NUMBER_FIELDS[series].typed}
+              label={`Nächste Startnummer ${SERIES_LABELS[series]}`}
+              value={typed(series)}
+              from={firstNumberOf(race, series)}
+              series={series}
+              note={state.next[series] === null ? "Keine Startnummer mehr frei. " : undefined}
+              error={state.errors?.[series]}
+            />
+            <input type="hidden" name={NEXT_NUMBER_FIELDS[series].shown} value={shown(series)} />
+          </>
+        ))}
+        <button type="submit" class="btn">Übernehmen</button>
+      </form>
+    </section>
   );
 }
 
@@ -157,17 +256,19 @@ function ReservedSection(props: { race: Race; state: ReservedSectionState }) {
 }
 
 /**
- * The Race settings page, filled with `values`, and its Reserved numbers
- * section; with errors in either, answered as 400.
+ * The Race settings page, filled with `values`, its Next numbers section and
+ * its Reserved numbers section; with errors in any, answered as 400.
  */
 export function raceSettingsPage(
   c: Context<AppEnv>,
   race: Race,
   values: RaceFormValues,
   errors: RaceInputErrors,
+  next: NextNumbersSectionState,
   reserved: ReservedSectionState,
 ) {
   const invalid = Object.keys(errors).length > 0;
+  const nextInvalid = Object.keys(next.errors ?? {}).length > 0;
   return c.html(
     <AdminPage url={c.req.url} title={`${race.name}: Einstellungen`} admin={c.get("adminEmail")}>
       <p><a href={racePath(race)}>← {race.name}</a></p>
@@ -181,8 +282,9 @@ export function raceSettingsPage(
         <button type="submit" class="btn">Speichern</button>
       </form>
       <p class="cancel"><a href={racePath(race)}>Abbrechen</a></p>
+      <NextNumbersSection race={race} state={next} />
       <ReservedSection race={race} state={reserved} />
     </AdminPage>,
-    invalid || reserved.error ? 400 : 200,
+    invalid || nextInvalid || reserved.error ? 400 : 200,
   );
 }

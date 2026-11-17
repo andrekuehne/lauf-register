@@ -91,6 +91,9 @@ const de = {
     retry: "Erneut senden",
     rejected: "Die Anmeldung hat nicht geklappt. Bitte melde dich am Anmeldetisch.",
     closed: "Die Online-Anmeldung ist inzwischen geschlossen. Bitte melde dich am Anmeldetisch.",
+    /** The series (singles or Pairs) has no Registration number left. */
+    fullSingle: "Online sind für Einzelne keine Startnummern mehr frei. Bitte melde dich am Anmeldetisch.",
+    fullPair: "Online sind für Paare keine Startnummern mehr frei. Bitte meldet euch am Anmeldetisch.",
     doneHeading: "Angemeldet!",
     numberLabel: "Deine Startnummer",
     deskHint: "Zeige diese Nummer am Anmeldetisch.",
@@ -182,6 +185,8 @@ const en: Strings = {
     retry: "Try again",
     rejected: "The registration didn't go through. Please go to the race desk.",
     closed: "Online registration has closed in the meantime. Please go to the race desk.",
+    fullSingle: "No more start numbers are free online for singles. Please go to the race desk.",
+    fullPair: "No more start numbers are free online for pairs. Please go to the race desk.",
     doneHeading: "You're registered!",
     numberLabel: "Your start number",
     deskHint: "Show this number at the race desk.",

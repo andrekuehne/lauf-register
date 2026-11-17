@@ -45,3 +45,6 @@ export function reservedRanges(numbers: readonly number[]): ReservedRange[] {
 
 /** "13", or "900–950" for a range. */
 export const formatRange = (range: ReservedRange) => (range.from === range.to ? String(range.from) : `${range.from}–${range.to}`);
+
+/** Any numbers as the pages list them: as ranges, comma-separated („23, 57, 181–994“). */
+export const formatNumbers = (numbers: readonly number[]) => reservedRanges(numbers).map(formatRange).join(", ");

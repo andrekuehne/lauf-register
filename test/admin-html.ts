@@ -43,6 +43,18 @@ export function reservedRangesOnPage(html: string): { text: string; from: string
   });
 }
 
+/** What a form on a page sends: its inputs' names and values, the form found by its class; undefined when there is none. */
+export function formFields(html: string, formClass: string): Record<string, string> | undefined {
+  const form = html.match(new RegExp(`<form[^>]*class="${formClass}"[^>]*>[\\s\\S]*?</form>`))?.[0];
+  if (!form) return undefined;
+  const fields: Record<string, string> = {};
+  for (const input of form.matchAll(/<input([^>]*)>/g)) {
+    const name = attr(input[1]!, "name");
+    if (name) fields[name] = attr(input[1]!, "value") ?? "";
+  }
+  return fields;
+}
+
 export type Toggle = {
   /** The half shown as the current state. */
   state: string;
