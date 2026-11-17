@@ -66,7 +66,7 @@ One-time setup in the Cloudflare dashboard:
 
 ## End-to-end tests
 
-`e2e/` drives the registration flow the way a Participant does, with Playwright in WebKit (stand-in for iPhone Safari) and Chromium, each at 390 px and 320 px phone width with touch. Every test creates its own Race through the admin pages, then registers through the public link and checks the result in the Admin's list.
+`e2e/` drives the registration flow the way a Participant does, with Playwright in WebKit (stand-in for iPhone Safari) and Chromium, each at 390 px and 320 px phone width with touch. Every test creates its own Race through the admin pages, then registers through the public link and checks the result in the Admin's list. Tests about what happens after registering (e.g. the search on the Race page) register faster by posting straight to the endpoint the flow posts to (`registerDirectly` in `e2e/helpers.ts`).
 
 `npm run test:e2e` starts its own `wrangler dev` on port 8791 with a fresh local database in `.wrangler/e2e-state` (all migrations applied), separate from the `npm run dev` one. The admin sign-in is the local Access stand-in from `wrangler.jsonc` (`access.dev`), the same as for `npm run dev`; nothing in the app is faked.
 
@@ -74,7 +74,7 @@ First time only, download the two browsers: `npx playwright install webkit chrom
 
 ## Browser code
 
-The browser scripts live in `src/client/`: the registration flow (`flow.ts`), the QR layer (`qr-layer.ts`) and the admin pages' confirmation dialogs (`confirm.ts`). `scripts/build-client.mjs` bundles them for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
+The browser scripts live in `src/client/`: the registration flow (`flow.ts`), the QR layer (`qr-layer.ts`), the admin pages' confirmation dialogs (`confirm.ts`) and the search on a Race's admin page (`race-search.ts`). `scripts/build-client.mjs` bundles them for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
 
 ## Data deletion
 

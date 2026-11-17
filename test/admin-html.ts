@@ -16,7 +16,7 @@ export function raceCard(html: string, name: string): string {
 
 /** The text of the Registration with this number in a Race's list, or "" when there is none. */
 export function registrationCardText(html: string, number: number): string {
-  const card = html.match(new RegExp(`<li class="card reg[^"]*" data-registration="${number}">[\\s\\S]*?</li>`))?.[0];
+  const card = html.match(new RegExp(`<li class="card reg[^"]*" data-registration="${number}"[^>]*>[\\s\\S]*?</li>`))?.[0];
   return card ? textOf(card) : "";
 }
 

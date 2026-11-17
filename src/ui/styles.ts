@@ -55,9 +55,9 @@ a.btn{text-align:center;text-decoration:none}
 .field{margin-top:14px}
 .label,label.label{display:block;font-weight:600;margin-bottom:6px}
 .label small{font-weight:400;color:var(--muted)}
-input[type=text],input[type=date]{display:block;width:100%;min-height:52px;padding:10px 12px;font:inherit;color:var(--fg);background:#fff;
+input[type=text],input[type=date],input[type=search]{display:block;width:100%;min-height:52px;padding:10px 12px;font:inherit;color:var(--fg);background:#fff;
 border:2px solid var(--line);border-radius:10px;-webkit-appearance:none;appearance:none}
-input[type=text]:focus,input[type=date]:focus{outline:3px solid #93c5fd;border-color:var(--accent)}
+input[type=text]:focus,input[type=date]:focus,input[type=search]:focus{outline:3px solid #93c5fd;border-color:var(--accent)}
 input[aria-invalid=true]{border-color:var(--danger)}
 .year{max-width:6.5rem}
 .with-side{display:flex;align-items:center;min-height:52px}
@@ -117,6 +117,8 @@ color:var(--muted);background:var(--card);border:2px solid var(--line);cursor:po
 .toggle-closed[aria-pressed=true]{background:var(--danger);border-color:var(--danger)}
 .toggle-open[aria-pressed=true]{background:var(--ok);border-color:var(--ok)}
 .toggle-half:focus{outline:3px solid #93c5fd;outline-offset:1px}
+.reg-search{margin:18px 0 0}
+.reg-none{margin:10px 0 0}
 .reg-list{list-style:none;margin:0;padding:0}
 .reg-duration h2{margin:28px 0 4px;padding-bottom:4px;border-bottom:2px solid var(--line)}
 .reg-group{margin:16px 0 8px;font-size:1.1rem;color:var(--c)}

@@ -1,7 +1,9 @@
 // The admin page of one Race (its Registrations) and the delete confirmation.
 
 import type { Context } from "hono";
+import { raw } from "hono/html";
 import { DIVISIONS, GENDER_LETTER, SINGLE_OR_PAIR, type Duration, type SingleOrPair } from "../domain/categories";
+import { raceSearchBundle } from "../generated/race-search-bundle";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, formatRegistrationTime } from "../races/race-dates";
@@ -10,6 +12,7 @@ import { duplicatesOf } from "../registration/duplicates";
 import { divisionOfRegistration, type ParticipantInput } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
 import type { NextAndReserved } from "../registration/reserved-numbers";
+import { SEARCH_ATTRIBUTES, SEARCH_FIELD_ID, searchKeys } from "../shared/registration-search";
 import { divisionIconSvg } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
 import { QrButton, QrLayers } from "../ui/qr-layer";
@@ -43,6 +46,12 @@ export function fullName(p: ParticipantInput): string {
 /** „Erika Muster“, or „Anna Muster und Ben Beispiel“ for a Pair. */
 export const participantNames = (registration: StoredRegistration) => registration.participants.map(fullName).join(" und ");
 
+/** The card attributes the Race page's search finds a Registration by. */
+function searchAttributes(registration: StoredRegistration) {
+  const keys = searchKeys([registration.number, ...registration.previousNumbers], registration.participants);
+  return { [SEARCH_ATTRIBUTES.numbers]: keys.numbers, [SEARCH_ATTRIBUTES.names]: keys.names };
+}
+
 /** One Registration: number, Category in its colour, time, and each Participant with any duplicate flag. */
 function RegistrationCard(props: {
   race: Race;
@@ -53,7 +62,7 @@ function RegistrationCard(props: {
   const { race, registration } = props;
   const division = divisionOfRegistration(registration);
   return (
-    <li class={`card reg div-${division}`} data-registration={registration.number}>
+    <li class={`card reg div-${division}`} data-registration={registration.number} {...searchAttributes(registration)}>
       <div class="reg-head">
         <b class="reg-no">{registration.number}</b>
         <span class="reg-cat">
@@ -157,19 +166,19 @@ export function raceRegistrationsPage(
     <AdminPage url={c.req.url} title={race.name} admin={c.get("adminEmail")}>
       <RaceHeader race={race} count={registrations.length} numbers={numbers} />
       <NumbersLeftNotice race={race} left={left} />
-      {registrations.length === 0 && <p class="muted">Noch keine Anmeldungen.</p>}
+      {registrations.length === 0 ? <p class="muted">Noch keine Anmeldungen.</p> : <RegistrationSearch />}
       {groups.map((group) => (
         <section class="reg-duration">
           <h2>{`${t.durations[group.duration].name} · ${group.count}`}</h2>
           {group.divisions.map(({ division, registrations: inDivision }) => (
-            <>
+            <div class="reg-division">
               <h3 class={`reg-group div-${division}`}>{`${t.divisions[division].category} · ${inDivision.length}`}</h3>
               <ul class="reg-list">
                 {inDivision.map((registration) => (
                   <RegistrationCard race={race} registration={registration} duplicates={duplicates} deletable />
                 ))}
               </ul>
-            </>
+            </div>
           ))}
         </section>
       ))}
@@ -177,7 +186,22 @@ export function raceRegistrationsPage(
         <a href={deleteRacePath(race)}>Lauf löschen …</a>
       </p>
       <QrLayers t={qrStrings} requestUrl={c.req.url} races={[race]} />
+      <script>{raw(raceSearchBundle)}</script>
     </AdminPage>,
+  );
+}
+
+/**
+ * The search field above the list, for the Race desk. Hidden until its script
+ * (src/client/race-search.ts) runs, so without JavaScript the page shows just the whole list.
+ */
+function RegistrationSearch() {
+  return (
+    <div class="field reg-search" hidden>
+      <label class="label" for={SEARCH_FIELD_ID}>Startnummer oder Name</label>
+      <input type="search" id={SEARCH_FIELD_ID} autocomplete="off" />
+      <p class="muted reg-none" role="status" hidden>Keine passende Anmeldung.</p>
+    </div>
   );
 }
 

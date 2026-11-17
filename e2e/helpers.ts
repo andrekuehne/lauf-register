@@ -95,3 +95,23 @@ export async function adminRegistration(page: Page, raceLink: string, number: st
   await page.goto(adminRacePath(raceLink));
   return page.locator(`li[data-registration="${number}"]`);
 }
+
+/** A Participant as the registration flow sends it. */
+export type SentParticipant = { gender: "F" | "M"; firstName: string; lastName: string; birthYear: number };
+
+/**
+ * Registers straight through the endpoint the registration flow posts to,
+ * for tests about what happens with Registrations afterwards; returns its number.
+ */
+export async function registerDirectly(page: Page, raceLink: string, participants: SentParticipant[], duration: 30 | 60 = 60): Promise<number> {
+  const res = await page.request.post(`${raceLink}/registrations`, {
+    data: {
+      attemptId: crypto.randomUUID(),
+      duration,
+      consent: true,
+      participants: participants.map((p) => ({ ...p, title: "none", club: null })),
+    },
+  });
+  expect(res.status()).toBe(200);
+  return ((await res.json()) as { number: number }).number;
+}
