@@ -4,7 +4,7 @@
 
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { anna, editForm, pairRegistration as pair, registration as single } from "./fixtures";
+import { anna, ben, editForm, pairRegistration as pair, registration as single } from "./fixtures";
 import { adminRacePath, asAdmin, newRace, numberOf, postDelete, postEdit, postReserve, submit } from "./http";
 
 beforeEach(async () => {
@@ -51,6 +51,31 @@ describe("Registration numbers", () => {
 
     // 6–49, then past 50: 5 is never given out again.
     expect(numbers).toEqual([...Array.from({ length: 44 }, (_, i) => 6 + i), 51, 52]);
+  });
+
+  it("skip a Previous number above the count: a single moved 5 → 50 → 60 keeps 50 from anyone else", async () => {
+    const race = await newRace("Stundenlauf");
+    for (let i = 0; i < 10; i++) await submit(race, single()); // 1–10
+    expect((await postEdit(race, 5, editForm(50, 60, [anna]))).status).toBe(303);
+    expect((await postEdit(race, 50, editForm(60, 60, [anna]))).status).toBe(303);
+
+    const numbers = [];
+    for (let i = 0; i < 41; i++) numbers.push(await numberOf(await submit(race, single())));
+
+    // 11–49, then past 50 (on that Registration's card as „vorher 50“).
+    expect(numbers).toEqual([...Array.from({ length: 39 }, (_, i) => 11 + i), 51, 52]);
+  });
+
+  it("skip a Previous number above the count for Pairs too", async () => {
+    const race = await newRace("Stundenlauf");
+    for (let i = 0; i < 3; i++) await submit(race, pair()); // 1001–1003
+    expect((await postEdit(race, 1002, editForm(1010, 60, [anna, ben]))).status).toBe(303);
+    expect((await postEdit(race, 1010, editForm(1020, 60, [anna, ben]))).status).toBe(303);
+
+    const numbers = [];
+    for (let i = 0; i < 8; i++) numbers.push(await numberOf(await submit(race, pair())));
+
+    expect(numbers).toEqual([1004, 1005, 1006, 1007, 1008, 1009, 1011, 1012]);
   });
 
   it("skip Reserved numbers in both series", async () => {

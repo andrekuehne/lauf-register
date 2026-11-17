@@ -211,6 +211,19 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
     expect(await firstNameOn(race, 9)).toBe("Ben");
   });
 
+  it("never moves a Registration onto a number another one had before", async () => {
+    const race = await newRace("Stundenlauf");
+    await submit(race, single({ participants: [erika] })); // 1
+    await submit(race, single({ participants: [ben] })); // 2
+    await postEdit(race, 2, editForm(3, 60, [ben]));
+    await postEdit(race, 3, editForm(6, 60, [ben])); // Ben: 6, vorher 2, 3
+
+    const result = pageText(await (await reserveConfirmed(race, "1")).text());
+
+    expect(result).toContain("1 → 4 (Erika Muster)");
+    expect(await firstNameOn(race, 4)).toBe("Erika");
+  });
+
   it("asks again when other numbers of the range were taken since the Admin was asked", async () => {
     const race = await newRace("Stundenlauf");
     await submit(race, single({ participants: [erika] })); // 1

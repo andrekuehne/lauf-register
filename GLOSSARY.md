@@ -63,7 +63,7 @@ _Avoid_: Couple, team
 _German (UI)_: Zu zweit (choice), Paar
 
 **Registration number**:
-The number shown on a Registration's confirmation screen and read out at the race desk; it is also the start number in the results software. Unique within a Race. Singles are numbered within 1–999 and Pairs within 1000–1999; each counts up from its own First number, skipping Reserved numbers and numbers already taken; a number once handed out is never handed out again automatically. An Admin may change it by hand to any number of its range that is neither taken in the Race nor Reserved, including one freed by deleting a Registration.
+The number shown on a Registration's confirmation screen and read out at the race desk; it is also the start number in the results software. Unique within a Race. Singles are numbered within 1–999 and Pairs within 1000–1999; each counts up from its own First number, skipping Reserved numbers, numbers already taken and Previous numbers; a number once handed out is never handed out again automatically. An Admin may change it by hand to any number of its range that is neither taken in the Race nor Reserved, including one freed by deleting a Registration, or a Previous number.
 _Avoid_: Bib (the physical number a Participant wears)
 _German (UI)_: Startnummer
 
@@ -77,7 +77,7 @@ _Avoid_: Excluded, blocked, skipped number
 _German (UI)_: gesperrte Startnummer
 
 **Previous number**:
-A Registration number a Registration had before it got a new one (because its number was Reserved, or by an Admin's hand). Shown with the Registration so the race desk can find a Participant whose confirmation screen still shows the old number.
+A Registration number a Registration had before it got a new one (because its number was Reserved, or by an Admin's hand). Shown with the Registration so the race desk can find a Participant whose confirmation screen still shows the old number; the automatic count never hands it out to another Registration. It goes when its Registration is deleted.
 _German (UI)_: vorher
 
 **Possible duplicate**:
