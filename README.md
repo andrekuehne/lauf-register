@@ -4,6 +4,35 @@ Phone-first race-day registration for timed runs. Participants scan a Race's QR 
 
 Built on Cloudflare Workers + D1 with Hono (server-rendered HTML). Live at <https://lauf-register.mail-4a4.workers.dev/>.
 
+## Race day
+
+What Admins do around a Race, in the order they need it. The main registration may already have run on another platform; this app then takes the on-site Registrations, numbered after the ones that platform has handed out. Button and field names are as the admin pages show them.
+
+### Before opening Registration
+
+1. **First numbers.** On the Race's settings page (Race page → „Einstellungen (Name, Datum, Startnummern)“), set „Erste Startnummer Einzeln“ and „Erste Startnummer Paare“ so the on-site numbers continue after the other platform's, e.g. 181 and 1061.
+2. **Reserved numbers.** On the same page, under „Gesperrte Startnummern“, reserve the numbers the other platform has handed out (e.g. `1-180`, then `1001-1060`) and the numbers of any lost bibs. The database then refuses them for the automatic count and for hand edits alike ([ADR 0003](docs/adr/0003-reserved-numbers-enforced-by-the-database.md)). Reserving numbers below a First number changes nothing else; it stops an Admin from giving a Registration, by hand, a number whose bib someone else already has.
+3. **Admin sign-in for the whole day.** In the Cloudflare dashboard, Zero Trust → Access controls → Applications → `lauf-register admin` → Edit: Access's **Session Duration** must cover the day (the default is 24 hours; setup in [Admin sign-in](#admin-sign-in-cloudflare-access)). Every Admin signs in fresh that morning: a session that runs out in the middle of saving loses that edit behind the sign-in page.
+4. **Open Registration** with the toggle on the start page or the Race page, and read the question before confirming: it shows „Nächste Startnummern: Einzelne 181, Paare 1061.“ and „Gesperrt: 1–180, 1001–1060.“ If those are not the numbers you expect, cancel and fix the settings first.
+
+### During the Race
+
+- **Backup:** download the Excel export („Excel für RaceResult herunterladen“ on the Race page) every hour or so. It is the practical backup.
+- **Finding someone at the Race desk:** the search field „Startnummer oder Name“ on the Race page finds a Registration by its number, by a Previous number („vorher“ on its card), or by part of a name. The list doesn't update itself: reload the page for new Registrations.
+- **A lost bib:** reserve its number on the settings page. If a Registration has it, the page asks first, then gives that Registration a new number from its series' count, as if it registered now, and lists the new numbers to hand out at the Race desk. Its card keeps the old one as a Previous number („vorher“).
+- **Few numbers left:** below 20 free numbers in a series, the Race page says how many are left.
+
+### When something goes wrong
+
+- **A series has no numbers left.** New Registrations of that series are refused: a phone says so when the person submits and sends them to the Race desk, and the Race page shows it with a link „Nächste Startnummer setzen“. There, under „Nächste Startnummern“, set where that series' count continues, then „Übernehmen“. It can't go below the series' First number; lower that first if the numbers you want are below it. Going back over numbers that are free now asks first and lists them: most belonged to a deleted Registration, whose bib may still be out. Reserve those whose bib is out, then confirm („Trotzdem übernehmen“).
+- **A Race or Registrations deleted by mistake.** D1 Time Travel puts the whole database back to a moment before the mistake; everything stored after that moment is lost, in every Race. From the project folder, signed in with `npx wrangler login`:
+  1. Save the current state first, outside the project folder: `npx wrangler d1 export lauf-register --remote --output=../before-restore.sql`, and download the Excel export of every Race still running. Registrations made after the restore point have to be entered again from these. Both hold Participants' personal data: delete them once they are no longer needed.
+  2. Check the moment: `npx wrangler d1 time-travel info lauf-register --timestamp=2026-12-09T10:41:00+01:00` (German time in winter is `+01:00`).
+  3. Restore: `npx wrangler d1 time-travel restore lauf-register --timestamp=2026-12-09T10:41:00+01:00`. It prints a bookmark that undoes the restore, should the moment have been wrong.
+
+  Time Travel reaches 30 days back on the Workers Paid plan and 7 days on Workers Free.
+- **The app is down.** Paper forms at the Race desk, typed into RaceResult directly.
+
 ## Development
 
 ### Prerequisites
@@ -53,7 +82,7 @@ Admins sign in with their email address and a one-time code from Cloudflare Acce
 One-time setup in the Cloudflare dashboard:
 
 1. **Turn on Zero Trust** (left menu → Zero Trust). Pick a team name and the Free plan (up to 50 users).
-2. **Zero Trust → Access → Applications → Add an application → Self-hosted.**
+2. **Zero Trust → Access controls → Applications → Add an application → Self-hosted.**
    - Name: `lauf-register admin`
    - Public hostnames: `lauf-register.mail-4a4.workers.dev` with path `admin`, and a second one with path `admin/*`
    - Login method: **One-time PIN** (codes by email; no other identity provider needed)
