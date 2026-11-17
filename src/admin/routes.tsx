@@ -8,7 +8,15 @@ import type { AppEnv } from "../language";
 import { dateInRaceTimeZone, formatRaceDateShort, raceYear } from "../races/race-dates";
 import { publicRacePath } from "../races/race-link";
 import { checkNextNumbers, postedNextNumbers } from "../races/next-number-input";
-import { raceFormValues, validateRaceInput, type RaceFormValues, type RaceInputErrors } from "../races/race-input";
+import {
+  newRaceFormValues,
+  raceFormValues,
+  validateNewRaceInput,
+  validateRaceInput,
+  type NewRaceFormValues,
+  type RaceFormValues,
+  type RaceInputErrors,
+} from "../races/race-input";
 import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, updateRace, type Race, type RaceListItem } from "../races/races";
 import {
   countRegistrations,
@@ -29,6 +37,7 @@ import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
 import {
   confirmedRegistrations,
+  FirstNumberFields,
   RaceFields,
   raceSettingsPage,
   reservedSectionPath,
@@ -49,12 +58,13 @@ import {
 
 const qrStrings = strings("de").qr;
 
-function NewRaceForm(props: { values?: RaceFormValues; errors?: RaceInputErrors }) {
-  const { values = raceFormValues(), errors = {} } = props;
+function NewRaceForm(props: { values?: NewRaceFormValues; errors?: RaceInputErrors }) {
+  const { values = newRaceFormValues(), errors = {} } = props;
   return (
     <form method="post" action="/admin/races" class="card" novalidate>
       <h2>Neuer Lauf</h2>
       <RaceFields values={values} errors={errors} />
+      <FirstNumberFields values={values} errors={errors} />
       <button type="submit" class="btn">Lauf anlegen</button>
       <p class="muted form-note">Die Anmeldung ist anfangs geschlossen. Öffne sie am Lauftag in der Liste unten.</p>
     </form>
@@ -93,7 +103,7 @@ function RaceList(props: { races: RaceCard[]; requestUrl: string }) {
   );
 }
 
-async function racesPage(c: Context<AppEnv>, form?: { values: RaceFormValues; errors: RaceInputErrors }) {
+async function racesPage(c: Context<AppEnv>, form?: { values: NewRaceFormValues; errors: RaceInputErrors }) {
   const races = await raceCards(c.env.DB);
   return c.html(
     <AdminPage url={c.req.url} admin={c.get("adminEmail")}>
@@ -241,7 +251,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
 
   admin.post("/races", async (c) => {
     const body = await c.req.parseBody();
-    const checked = validateRaceInput(body, { today: today() });
+    const checked = validateNewRaceInput(body, today());
     if (!checked.ok) return racesPage(c, checked);
     await createRace(c.env.DB, { ...checked.input, createdBy: c.get("adminEmail") });
     return c.redirect("/admin", 303);
@@ -289,7 +299,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
       const posted = postedNextNumbers(await c.req.parseBody());
       // The fields as posted, shown again with an error or a question.
       const asPosted = { typed: posted.typed, shown: posted.shown };
-      const checked = checkNextNumbers(posted, race);
+      const checked = checkNextNumbers(posted);
       if (!checked.ok) return settingsPage(c, race, { next: { ...asPosted, errors: checked.errors } });
       // Asks first when a series would go back over free numbers, and again when those changed since the Admin was asked.
       const result = await setNextNumbers(c.env.DB, race.id, checked.changed, posted.confirmed);

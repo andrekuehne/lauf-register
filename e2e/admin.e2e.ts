@@ -110,7 +110,9 @@ test("reserving a lost bib: the Admin confirms, and the Registration gets a new 
 
   // The answer opens at the section, not at the top of the long page.
   await expect(page.getByRole("alert")).toBeInViewport();
-  await expect(page.getByRole("alert")).toContainText("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.");
+  await expect(page.getByRole("alert")).toContainText(
+    "Startnummer 1 ist an Erika Muster vergeben. Sie bekommt die nächste freie Startnummer; die 1 steht dann als „vorher“ auf der Karte.",
+  );
   await page.getByRole("button", { name: "Sperren und neue Startnummer vergeben" }).tap();
 
   await expect(page.getByRole("status")).toBeInViewport();

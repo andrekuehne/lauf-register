@@ -73,11 +73,11 @@ _Avoid_: Range (the numbers a series may use), block
 _German (UI)_: named after its Registrations: Einzelne, Paare
 
 **First number**:
-Where a series starts counting Registration numbers, within its range; set per Race by an Admin (by default 1 for singles, 1001 for Pairs).
+Where a new Race's series starts counting Registration numbers, within its range; set by an Admin when creating the Race (by default 1 for singles, 1001 for Pairs). From then on, the series' Next number says where it continues.
 _Avoid_: Start number, offset
 
 **Next number**:
-Where a series' count continues: the number it hands out next, unless that number is taken, Reserved or a Previous number. An Admin can set it to skip ahead, or to go back, e.g. when a series has no number left; going back over free numbers asks first, as they may have belonged to a deleted Registration whose bib is out. Never below the series' First number.
+Where a series' count continues: the number it hands out next, unless that number is taken, Reserved or a Previous number. An Admin can set it anywhere within the series' range, to skip ahead, or to go back, e.g. when a series has no number left; going back over free numbers asks first, as they may have belonged to a deleted Registration whose bib is out. Registrations keep their numbers either way.
 _German (UI)_: nächste Startnummer
 
 **Reserved number**:

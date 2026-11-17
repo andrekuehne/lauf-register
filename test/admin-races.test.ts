@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { links, raceCard, registrationToggle } from "./admin-html";
+import { links, pageText, raceCard, registrationToggle } from "./admin-html";
 import { pairRegistration, registration } from "./fixtures";
 import {
   ADMIN,
@@ -82,6 +82,9 @@ describe("admin area", () => {
     const form = await (await asAdmin("/admin")).text();
     expect(form).toContain('name="firstSingleNumber" value="1"');
     expect(form).toContain('name="firstPairNumber" value="1001"');
+    expect(pageText(form)).toContain(
+      "Neue Anmeldungen bekommen automatisch Startnummern ab hier. Später änderbar in den Einstellungen unter „Nächste Startnummern“.",
+    );
 
     const res = await postRace({ name: "Kaputt", date: "2026-12-09", firstSingleNumber: "0", firstPairNumber: "" });
 

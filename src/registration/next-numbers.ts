@@ -7,8 +7,15 @@ import { NUMBER_RANGES } from "../domain/numbers";
 import { formatNumbers } from "../domain/reserved-numbers";
 import type { PerSeries } from "../races/next-number-input";
 
-/** The column holding the number a Race's series handed out last (0: none yet). */
+/**
+ * The column holding where a Race's series count continues: it starts looking
+ * above this number. That is the number it handed out last, or the one before
+ * the First number the Race was created with or a Next number an Admin set.
+ */
 export const lastNumberColumn = (series: SingleOrPair) => `last_${series}_number`;
+
+/** What lastNumberColumn holds for a series whose count is to continue at `next`: the number before it. */
+export const lastNumberBefore = (next: number) => next - 1;
 
 /**
  * SQL for the numbers from `fromSql` to `toSql` (SQL expressions) that the
@@ -26,8 +33,8 @@ const unavailableNumbersSql = (fromSql: string, toSql: string) => `
   UNION SELECT p.number FROM previous_numbers p CROSS JOIN registrations r ON r.id = p.registration_id
     WHERE r.race_id = races.id AND p.number BETWEEN ${fromSql} AND ${toSql}`;
 
-/** SQL for where a series' count starts looking: its First number, or above the number it handed out last. */
-const startSql = (series: SingleOrPair) => `MAX(races.first_${series}_number, races.${lastNumberColumn(series)} + 1)`;
+/** SQL for where a series' count starts looking: above its stored number (see lastNumberColumn), never below its range. */
+const startSql = (series: SingleOrPair) => `MAX(${NUMBER_RANGES[series].from}, races.${lastNumberColumn(series)} + 1)`;
 
 /**
  * SQL for the unavailable numbers a series' count can still come to: from where
@@ -37,9 +44,9 @@ const unavailableAheadSql = (series: SingleOrPair) => unavailableNumbersSql(star
 
 /**
  * SQL for the next automatic number of a series in the Race of the enclosing
- * query's `races` row, NULL when there is none: the smallest number that is at
- * least the series' First number, above the number it handed out last, within
- * its range, and available (not taken, Reserved or a Previous number). With
+ * query's `races` row, NULL when there is none: the smallest number from where
+ * the count starts looking (see startSql) to the top of its range that is
+ * available (not taken, Reserved or a Previous number). With
  * `beingReserved`, also outside a range about to be Reserved, whose last,
  * first and last number the SQL then takes as parameters, in that order.
  */
@@ -95,8 +102,8 @@ export async function setNextNumbers(
       values.push(value);
       return `?${values.length}`;
     };
-    // The count starts looking above the number it handed out last.
-    const setLastNumbers = series.map((s) => `${lastNumberColumn(s)} = ${parameter(changed[s]! - 1)}`).join(", ");
+    // The count starts looking above the stored number.
+    const setLastNumbers = series.map((s) => `${lastNumberColumn(s)} = ${parameter(lastNumberBefore(changed[s]!))}`).join(", ");
     // Only while the numbers it goes back over are still those just listed.
     const sameNumbersPassed = passed
       .map((p, i) => `AND (SELECT COUNT(*) FROM (${unavailableNumbersSql(parameter(changed[series[i]!]!), parameter(p.last))})) = ${parameter(p.unavailable)}`)
@@ -114,10 +121,12 @@ export async function setNextNumbers(
 const raceExists = async (db: D1Database, raceId: number) => (await db.prepare("SELECT 1 FROM races WHERE id = ?").bind(raceId).first()) !== null;
 
 /**
- * What a series' count would go back over, from `from` up to the number it
- * handed out last (`last`): the free numbers it would hand out again, and how
- * many in between are unavailable. The count has passed the free ones, so most
- * belonged to a Registration that was deleted.
+ * What a series' count would go back over, from `from` up to its stored number
+ * (`last`, see lastNumberColumn): the free numbers it would hand out again, and
+ * how many in between are unavailable. Most free ones the count has passed
+ * belonged to a Registration that was deleted; the app can't tell them from
+ * numbers never handed out (below where the Race's count began, or jumped over
+ * when an Admin set the Next number ahead), so it asks about all of them.
  */
 async function passedOver(db: D1Database, raceId: number, series: SingleOrPair, from: number): Promise<{ free: number[]; last: number; unavailable: number }> {
   const last = lastNumberColumn(series);

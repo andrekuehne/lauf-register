@@ -26,25 +26,17 @@ beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
 });
 
-const settings = (overrides: Record<string, string> = {}) => ({
-  name: "Stundenlauf",
-  date: "2026-12-09",
-  firstSingleNumber: "1",
-  firstPairNumber: "1001",
-  ...overrides,
-});
+const settings = (overrides: Record<string, string> = {}) => ({ name: "Stundenlauf", date: "2026-12-09", ...overrides });
 
 describe("Race settings", () => {
-  it("shows the Race's current values and saves a new name and date", async () => {
-    const race = await newRace("Stundenlauf", "2026-12-09", { firstSingleNumber: 7, firstPairNumber: 1023 });
+  it("shows the Race's current name and date and saves new ones", async () => {
+    const race = await newRace("Stundenlauf");
 
     const page = await (await asAdmin(settingsPath(race))).text();
     expect(page).toContain('value="Stundenlauf"');
     expect(page).toContain('value="2026-12-09"');
-    expect(page).toContain('value="7"');
-    expect(page).toContain('value="1023"');
 
-    await postSettings(race, settings({ name: "Nikolauslauf", date: "2026-12-10", firstSingleNumber: "7", firstPairNumber: "1023" }));
+    await postSettings(race, settings({ name: "Nikolauslauf", date: "2026-12-10" }));
 
     const racePage = await (await asAdmin(adminRacePath(race))).text();
     expect(racePage).toContain("Nikolauslauf");
@@ -55,16 +47,14 @@ describe("Race settings", () => {
   it("refuses invalid values with German messages and keeps the stored ones", async () => {
     const race = await newRace("Stundenlauf");
 
-    const res = await postSettings(race, settings({ name: " ", date: "2026-02-30", firstSingleNumber: "1000", firstPairNumber: "abc" }));
+    const res = await postSettings(race, settings({ name: " ", date: "2026-02-30" }));
 
     expect(res.status).toBe(400);
     const html = await res.text();
     expect(html).toContain("Bitte einen Namen eingeben.");
     expect(html).toContain("Bitte ein gültiges Datum wählen.");
-    expect(html).toContain("Bitte eine Zahl von 1 bis 999 eingeben.");
-    expect(html).toContain("Bitte eine Zahl von 1000 bis 1999 eingeben.");
-    expect(html).toContain('value="abc"');
-    expect(await numberOf(await submit(race, single()))).toBe(1);
+    expect(html).toContain('value="2026-02-30"');
+    expect(await (await asAdmin(adminRacePath(race))).text()).toContain("Stundenlauf");
   });
 
   it("refuses a date in the past, but saves a Race after its day when its date stays as it is", async () => {
@@ -103,20 +93,19 @@ describe("Race settings", () => {
     expect(await numberOf(await submit(race, single()))).toBe(1);
   });
 
-  it("raising a First number jumps ahead; lowering it never hands out an old number again", async () => {
+  it("leaves numbering alone: Registrations keep their numbers and the counts continue where they were, whatever else is posted", async () => {
     const race = await newRace("Stundenlauf");
-    await numberOf(await submit(race, single())); // 1
-    await numberOf(await submit(race, single())); // 2
+    await submit(race, single({ participants: [ben] })); // 1
+    await submit(race, pair()); // 1001
 
-    const raised = await postSettings(race, settings({ firstSingleNumber: "50", firstPairNumber: "1500" }));
-    expect(raised.status).toBe(303);
-    expect(raised.headers.get("location")).toBe(adminRacePath(race));
-    expect(await numberOf(await submit(race, single()))).toBe(50);
-    expect(await numberOf(await submit(race, pair()))).toBe(1500);
+    // First numbers, as the form sent them before it lost those fields, change nothing.
+    const saved = await postSettings(race, settings({ name: "Nikolauslauf", firstSingleNumber: "50", firstPairNumber: "1500" }));
 
-    await postSettings(race, settings({ firstSingleNumber: "1", firstPairNumber: "1001" }));
-    expect(await numberOf(await submit(race, single()))).toBe(51);
-    expect(await numberOf(await submit(race, pair()))).toBe(1501);
+    expect(saved.status).toBe(303);
+    expect(saved.headers.get("location")).toBe(adminRacePath(race));
+    expect(await firstNameOn(race, 1)).toBe("Ben");
+    expect(await numberOf(await submit(race, single()))).toBe(2);
+    expect(await numberOf(await submit(race, pair()))).toBe(1002);
   });
 });
 
@@ -147,12 +136,22 @@ describe("Reserved numbers on the Race settings page", () => {
     expect(pageText(page)).toContain("Keine gesperrten Startnummern.");
   });
 
-  it("explains that they are never handed out, neither by the count nor by hand", async () => {
+  it("explains that they are never handed out, what reserving a taken one does, and what removing one does", async () => {
     const race = await newRace("Stundenlauf");
 
-    const page = await (await asAdmin(settingsPath(race))).text();
+    const page = pageText(await (await asAdmin(settingsPath(race))).text());
 
-    expect(pageText(page)).toContain("Werden nie vergeben, weder automatisch noch von Hand, z. B. wenn eine Startnummer verloren gegangen ist.");
+    expect(page).toContain(
+      "Gesperrte Startnummern werden nie vergeben, weder automatisch noch von Hand – z. B. die Startnummern einer anderen Anmeldeplattform " +
+        "oder eine verlorene Startnummer.",
+    );
+    expect(page).toContain(
+      "Hat eine Anmeldung eine davon, kommt vorher eine Rückfrage: Nur diese Anmeldung bekommt eine neue Startnummer (die nächste freie), " +
+        "die alte steht auf ihrer Karte als „vorher“. Alle anderen Anmeldungen bleiben, wie sie sind.",
+    );
+    expect(page).toContain(
+      "Entsperren macht die Nummer wieder frei. Automatisch vergeben wird sie nur, wenn die automatische Vergabe noch nicht darüber hinaus ist.",
+    );
   });
 
   it("refuses what it can't read with a German message, keeping what was typed and reserving nothing", async () => {
@@ -204,7 +203,7 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
 
     expect(asked.status).toBe(200);
     const question = await asked.text();
-    expect(pageText(question)).toContain("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.");
+    expect(pageText(question)).toContain("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt die nächste freie Startnummer; die 1 steht dann als „vorher“ auf der Karte.");
     // Nothing happens before the Admin confirms.
     expect(reservedRangesOnPage(question)).toEqual([]);
     expect(await firstNameOn(race, 1)).toBe("Erika");
@@ -213,7 +212,9 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
 
     expect(confirmed.status).toBe(200);
     const result = await confirmed.text();
-    expect(pageText(result)).toContain("1 → 3 (Erika Muster)");
+    expect(pageText(result)).toContain(
+      "Diese Anmeldungen haben jetzt neue Startnummern. Bitte am Anmeldetisch ausgeben: 1 → 3 (Erika Muster)",
+    );
     expect(reservedRangesOnPage(result).map((e) => e.text)).toEqual(["1"]);
     expect(await firstNameOn(race, 1)).toBeNull();
     expect(await firstNameOn(race, 3)).toBe("Erika");
@@ -228,14 +229,14 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
     await submit(race, pair()); // 1001: Dr. Anna Muster and Ben Beispiel
 
     const question = await (await postReserve(race, "1-2")).text();
-    expect(pageText(question)).toContain("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.");
-    expect(pageText(question)).toContain("Startnummer 2 ist an Ben Beispiel vergeben. Er bekommt eine neue Startnummer.");
+    expect(pageText(question)).toContain("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt die nächste freie Startnummer; die 1 steht dann als „vorher“ auf der Karte.");
+    expect(pageText(question)).toContain("Startnummer 2 ist an Ben Beispiel vergeben. Er bekommt die nächste freie Startnummer; die 2 steht dann als „vorher“ auf der Karte.");
     const singles = pageText(await (await postReserve(race, "1-2", confirmationOn(question))).text());
     expect(singles).toContain("1 → 3 (Erika Muster)");
     expect(singles).toContain("2 → 4 (Ben Beispiel)");
 
     const pairQuestion = await (await postReserve(race, "1001")).text();
-    expect(pageText(pairQuestion)).toContain("Startnummer 1001 ist an Dr. Anna Muster und Ben Beispiel vergeben. Sie bekommen eine neue Startnummer.");
+    expect(pageText(pairQuestion)).toContain("Startnummer 1001 ist an Dr. Anna Muster und Ben Beispiel vergeben. Sie bekommen die nächste freie Startnummer; die 1001 steht dann als „vorher“ auf der Karte.");
     const pairs = pageText(await (await postReserve(race, "1001", confirmationOn(pairQuestion))).text());
     expect(pairs).toContain("1001 → 1002 (Dr. Anna Muster und Ben Beispiel)");
     expect(await firstNameOn(race, 1002)).toBe("Anna");
@@ -276,7 +277,7 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
 
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(pageText(html)).toContain("Startnummer 2 ist an Dr. Anna Muster vergeben. Sie bekommt eine neue Startnummer.");
+    expect(pageText(html)).toContain("Startnummer 2 ist an Dr. Anna Muster vergeben. Sie bekommt die nächste freie Startnummer; die 2 steht dann als „vorher“ auf der Karte.");
     expect(reservedRangesOnPage(html)).toEqual([]);
     expect(await firstNameOn(race, 1)).toBe("Erika");
     expect(await firstNameOn(race, 2)).toBe("Anna");
@@ -295,7 +296,7 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
 
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(pageText(html)).toContain("Startnummer 1 ist an Ben Beispiel vergeben. Er bekommt eine neue Startnummer.");
+    expect(pageText(html)).toContain("Startnummer 1 ist an Ben Beispiel vergeben. Er bekommt die nächste freie Startnummer; die 1 steht dann als „vorher“ auf der Karte.");
     expect(reservedRangesOnPage(html)).toEqual([]);
     expect(await firstNameOn(race, 1)).toBe("Ben");
   });

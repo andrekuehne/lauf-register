@@ -29,7 +29,7 @@ const nextOf = (next: NextNumbers, series: SingleOrPair) => {
 /**
  * The question asked before changing the Race's state, naming the Race. Before
  * opening, it also shows where the counts continue and what is Reserved, so a
- * Race whose First numbers were never set is caught before someone gets a bib
+ * Race whose numbers were never set is caught before someone gets a bib
  * already handed out.
  */
 const question = (race: RaceWithToggle) =>

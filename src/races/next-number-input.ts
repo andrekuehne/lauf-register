@@ -2,8 +2,7 @@
 // where an Admin sets where each series' count continues (see GLOSSARY.md: Next number).
 
 import { SINGLE_OR_PAIR, type SingleOrPair } from "../domain/categories";
-import { NUMBER_RANGES, numberInRange } from "../domain/numbers";
-import { firstNumberOf, type Race } from "./races";
+import { numberInRange, rangeError } from "../domain/numbers";
 
 /**
  * The form's fields per series: the Next number typed, the one the field
@@ -42,20 +41,16 @@ export function postedNextNumbers(raw: Record<string, unknown>): PostedNextNumbe
 /**
  * The Next numbers the Admin changed (a field still showing what it showed when
  * the page was opened is left alone), or why one can't be: each must be a
- * number from its series' First number to the top of its range.
+ * number of its series' range.
  */
-export function checkNextNumbers(
-  posted: PostedNextNumbers,
-  race: Race,
-): { ok: true; changed: PerSeries<number> } | { ok: false; errors: PerSeries<string> } {
+export function checkNextNumbers(posted: PostedNextNumbers): { ok: true; changed: PerSeries<number> } | { ok: false; errors: PerSeries<string> } {
   const changed: PerSeries<number> = {};
   const errors: PerSeries<string> = {};
   for (const series of SINGLE_OR_PAIR) {
     const typed = posted.typed[series].trim();
     if (typed === posted.shown[series].trim()) continue;
-    const first = firstNumberOf(race, series);
     const number = numberInRange(typed, series);
-    if (number === null || number < first) errors[series] = `Bitte eine Zahl von ${first} bis ${NUMBER_RANGES[series].to} eingeben.`;
+    if (number === null) errors[series] = rangeError(series);
     else changed[series] = number;
   }
   return Object.keys(errors).length > 0 ? { ok: false, errors } : { ok: true, changed };

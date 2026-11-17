@@ -1,7 +1,7 @@
-// The Race settings page, and the Race form's fields (name, date, First numbers)
-// it shares with "Neuer Lauf" on the admin start page. Below the form, the
-// Race's Next numbers and its Reserved numbers, each changed right away (not
-// with „Speichern“).
+// The Race settings page, and the Race form's fields: name and date, which it
+// shares with "Neuer Lauf" on the admin start page, and the First numbers, which
+// only "Neuer Lauf" has. Below the form, the Race's Next numbers and its
+// Reserved numbers, each changed right away (not with „Speichern“).
 
 import type { Context } from "hono";
 import { raw } from "hono/html";
@@ -11,17 +11,17 @@ import { formatRange, reservedRanges } from "../domain/reserved-numbers";
 import { ICONS } from "../ui/icon-svgs";
 import type { AppEnv } from "../language";
 import { NEXT_NUMBER_FIELDS, type PerSeries } from "../races/next-number-input";
-import { MAX_RACE_NAME_LENGTH, type RaceFormValues, type RaceInputErrors } from "../races/race-input";
-import { firstNumberOf, type Race } from "../races/races";
+import { MAX_RACE_NAME_LENGTH, type NewRaceFormValues, type RaceFormValues, type RaceInputErrors } from "../races/race-input";
+import type { Race } from "../races/races";
 import type { NextNumbers } from "../registration/next-numbers";
 import type { StoredRegistration } from "../registration/registrations";
 import type { Move } from "../registration/reserved-numbers";
 import { AdminPage, SERIES_NAMES } from "./admin-page";
 import { nextNumbersSectionPath, participantNames, racePath, settingsPath } from "./registrations-page";
 
-/** A Registration number field of a series: the number, the numbers allowed below it (with `note` before them), and any error. */
-function NumberField(props: { id: string; name: string; label: string; value: string; from: number; series: SingleOrPair; note?: string; error?: string }) {
-  const { to } = NUMBER_RANGES[props.series];
+/** A Registration number field of a series: the number, its series' range below it (with `note` before it), and any error. */
+function NumberField(props: { id: string; name: string; label: string; value: string; series: SingleOrPair; note?: string; error?: string }) {
+  const { from, to } = NUMBER_RANGES[props.series];
   return (
     <div class="field">
       <label class="label" for={props.id}>{props.label}</label>
@@ -36,24 +36,33 @@ function NumberField(props: { id: string; name: string; label: string; value: st
         autocomplete="off"
         aria-invalid={props.error ? "true" : undefined}
       />
-      <p class="muted form-note">{`${props.note ?? ""}${props.from}–${to}`}</p>
+      <p class="muted form-note">{`${props.note ?? ""}${from}–${to}`}</p>
       {props.error && <p class="error">{props.error}</p>}
     </div>
   );
 }
 
-function FirstNumberInput(props: { name: FirstNumberField; label: string; values: RaceFormValues; errors: RaceInputErrors }) {
-  const series = FIRST_NUMBER_FIELDS[props.name];
+function FirstNumberInput(props: { name: FirstNumberField; label: string; values: NewRaceFormValues; errors: RaceInputErrors }) {
   return (
     <NumberField
       id={`race-${props.name}`}
       name={props.name}
       label={props.label}
       value={props.values[props.name]}
-      from={NUMBER_RANGES[series].from}
-      series={series}
+      series={FIRST_NUMBER_FIELDS[props.name]}
       error={props.errors[props.name]}
     />
+  );
+}
+
+/** "Neuer Lauf" only: where the new Race's series begin counting. Later, „Nächste Startnummern“ on the settings page changes that. */
+export function FirstNumberFields(props: { values: NewRaceFormValues; errors: RaceInputErrors }) {
+  return (
+    <>
+      <FirstNumberInput name="firstSingleNumber" label="Erste Startnummer Einzeln" values={props.values} errors={props.errors} />
+      <FirstNumberInput name="firstPairNumber" label="Erste Startnummer Paare" values={props.values} errors={props.errors} />
+      <p class="muted form-note">Neue Anmeldungen bekommen automatisch Startnummern ab hier. Später änderbar in den Einstellungen unter „Nächste Startnummern“.</p>
+    </>
   );
 }
 
@@ -71,8 +80,6 @@ export function RaceFields(props: { values: RaceFormValues; errors: RaceInputErr
         <input type="date" id="race-date" name="date" value={values.date} aria-invalid={errors.date ? "true" : undefined} />
         {errors.date && <p class="error">{errors.date}</p>}
       </div>
-      <FirstNumberInput name="firstSingleNumber" label="Erste Startnummer Einzeln" values={values} errors={errors} />
-      <FirstNumberInput name="firstPairNumber" label="Erste Startnummer Paare" values={values} errors={errors} />
     </>
   );
 }
@@ -90,7 +97,7 @@ export type NextNumbersSectionState = {
   toConfirm?: PerSeries<string>;
 };
 
-/** Series as the field labels name them, like the First numbers'. */
+/** Series as the field labels name them, like "Neuer Lauf"'s First numbers. */
 const SERIES_LABELS: Record<SingleOrPair, string> = { single: "Einzeln", pair: "Paare" };
 
 /** Where the „Nächste Startnummern“ form posts to. */
@@ -110,16 +117,20 @@ function NextNumbersSection(props: { race: Race; state: NextNumbersSectionState 
     <section class="card" id="next">
       <h2>Nächste Startnummern</h2>
       <p class="muted form-note">
-        Hier zählen neue Anmeldungen weiter. Vergebene und gesperrte Startnummern werden übersprungen, ebenso die alten Startnummern
-        umnummerierter Anmeldungen („vorher …“).
+        <b>Vergebene Startnummern ändern sich nicht.</b> Die nächste neue Anmeldung bekommt diese Startnummer oder die nächste freie danach;
+        vergebene, gesperrte und „vorher“-Startnummern werden übersprungen.
+      </p>
+      <p class="muted form-note">
+        Höher setzen: Die Nummern dazwischen werden nicht automatisch vergeben. Niedriger setzen: Freie Nummern dazwischen werden wieder
+        vergeben – davor kommt eine Rückfrage.
       </p>
       {toConfirm.length > 0 && (
         <div class="alert next-confirm" role="alert">
-          <p><b>Diese Startnummern sind frei und werden wieder vergeben:</b></p>
+          <p><b>Diese Startnummern sind frei und werden dann wieder vergeben:</b></p>
           <ul class="moves">
             {toConfirm.map((series) => <li>{`${SERIES_NAMES[series]}: ${state.toConfirm?.[series]}`}</li>)}
           </ul>
-          <p>Ist eine davon schon ausgegeben, bitte vorher sperren.</p>
+          <p>Meist gehörten sie zu gelöschten Anmeldungen. Ist eine davon noch im Umlauf, bitte erst sperren.</p>
           <form method="post" action={action} class="next-confirm-form">
             {SINGLE_OR_PAIR.map((series) => (
               <>
@@ -143,7 +154,6 @@ function NextNumbersSection(props: { race: Race; state: NextNumbersSectionState 
               name={NEXT_NUMBER_FIELDS[series].typed}
               label={`Nächste Startnummer ${SERIES_LABELS[series]}`}
               value={typed(series)}
-              from={firstNumberOf(race, series)}
               series={series}
               note={state.next[series] === null ? "Keine Startnummer mehr frei. " : undefined}
               error={state.errors?.[series]}
@@ -170,11 +180,14 @@ export type ReservedSectionState = {
   moves?: Move[];
 };
 
-/** „Startnummer 23 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.“ */
+/** „Startnummer 23 ist an Erika Muster vergeben. Sie bekommt die nächste freie Startnummer; die 23 steht dann als „vorher“ auf der Karte.“ */
 function takenLine(registration: StoredRegistration): string {
-  const { participants } = registration;
+  const { number, participants } = registration;
   const gets = participants.length === 2 ? "Sie bekommen" : participants[0]!.gender === "F" ? "Sie bekommt" : "Er bekommt";
-  return `Startnummer ${registration.number} ist an ${participantNames(registration)} vergeben. ${gets} eine neue Startnummer.`;
+  return (
+    `Startnummer ${number} ist an ${participantNames(registration)} vergeben. ` +
+    `${gets} die nächste freie Startnummer; die ${number} steht dann als „vorher“ auf der Karte.`
+  );
 }
 
 /** „23 → 57 (Erika Muster)“ */
@@ -196,10 +209,21 @@ function ReservedSection(props: { race: Race; state: ReservedSectionState }) {
   return (
     <section class="card" id="reserved">
       <h2>Gesperrte Startnummern</h2>
-      <p class="muted form-note">Werden nie vergeben, weder automatisch noch von Hand, z. B. wenn eine Startnummer verloren gegangen ist.</p>
+      <p class="muted form-note">
+        Gesperrte Startnummern werden nie vergeben, weder automatisch noch von Hand – z. B. die Startnummern einer anderen Anmeldeplattform
+        oder eine verlorene Startnummer.
+      </p>
+      <p class="muted form-note">
+        Hat eine Anmeldung eine davon, kommt vorher eine Rückfrage: Nur diese Anmeldung bekommt eine neue Startnummer (die nächste freie),
+        die alte steht auf ihrer Karte als „vorher“. <b>Alle anderen Anmeldungen bleiben, wie sie sind.</b>
+      </p>
+      <p class="muted form-note">
+        Entsperren macht die Nummer wieder frei. Automatisch vergeben wird sie nur, wenn die automatische Vergabe noch nicht darüber hinaus
+        ist.
+      </p>
       {state.moves && state.moves.length > 0 && (
         <div class="notice" role="status">
-          <p><b>Neue Startnummern, bitte am Anmeldetisch neu ausgeben:</b></p>
+          <p><b>Diese Anmeldungen haben jetzt neue Startnummern. Bitte am Anmeldetisch ausgeben:</b></p>
           <ul class="moves">
             {state.moves.map((move) => <li>{moveLine(move)}</li>)}
           </ul>
@@ -276,9 +300,6 @@ export function raceSettingsPage(
       {invalid && <p class="alert" role="alert">Bitte die markierten Angaben prüfen.</p>}
       <form method="post" action={settingsPath(race)} class="card" novalidate>
         <RaceFields values={values} errors={errors} />
-        <p class="muted form-note">
-          Neue Startnummern zählen ab der ersten Startnummer weiter, aber nie unter eine schon vergebene zurück.
-        </p>
         <button type="submit" class="btn">Speichern</button>
       </form>
       <p class="cancel"><a href={racePath(race)}>Abbrechen</a></p>

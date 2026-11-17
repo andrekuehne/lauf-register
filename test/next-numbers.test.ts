@@ -9,6 +9,7 @@ import { formFields, links, pageText } from "./admin-html";
 import {
   adminRacePath,
   asAdmin,
+  editPath,
   newRace,
   nextNumbersConfirmationOn,
   nextNumbersForm,
@@ -17,7 +18,6 @@ import {
   postEdit,
   postNextNumbers,
   postReserve,
-  postSettings,
   settingsPath,
   submit,
 } from "./http";
@@ -27,6 +27,33 @@ beforeEach(async () => {
 });
 
 describe("Next numbers on the Race settings page", () => {
+  it("come with a note: numbers handed out don't change, and what setting one higher or lower does", async () => {
+    const race = await newRace("Stundenlauf");
+
+    const page = pageText(await (await asAdmin(settingsPath(race))).text());
+
+    expect(page).toContain(
+      "Vergebene Startnummern ändern sich nicht. Die nächste neue Anmeldung bekommt diese Startnummer oder die nächste freie danach; " +
+        "vergebene, gesperrte und „vorher“-Startnummern werden übersprungen.",
+    );
+    expect(page).toContain(
+      "Höher setzen: Die Nummern dazwischen werden nicht automatisch vergeben. Niedriger setzen: Freie Nummern dazwischen werden wieder " +
+        "vergeben – davor kommt eine Rückfrage.",
+    );
+  });
+
+  it("of a new Race are the First numbers it was created with, which it hands out first; the settings form has no First numbers", async () => {
+    const race = await newRace("Nikolauslauf", "2026-12-09", { firstSingleNumber: 181, firstPairNumber: 1061 });
+
+    const page = await (await asAdmin(settingsPath(race))).text();
+
+    expect(formFields(page, "next-numbers")).toMatchObject({ nextSingleNumber: "181", nextPairNumber: "1061" });
+    expect(page).not.toContain("firstSingleNumber");
+    expect(page).not.toContain("Erste Startnummer");
+    expect(await numberOf(await submit(race, single()))).toBe(181);
+    expect(await numberOf(await submit(race, pair()))).toBe(1061);
+  });
+
   it("show where each series' count continues, and an empty field with a note when a series has no number left", async () => {
     const race = await newRace("Stundenlauf", "2026-12-09", { firstSingleNumber: 998, firstPairNumber: 1023 });
     await submit(race, pair()); // 1023
@@ -55,11 +82,11 @@ describe("Setting a Next number", () => {
   });
 
   const invalid: [string, string, string, string][] = [
-    ["below the First number", "nextSingleNumber", "180", "Bitte eine Zahl von 181 bis 999 eingeben."],
-    ["above the range", "nextSingleNumber", "1000", "Bitte eine Zahl von 181 bis 999 eingeben."],
-    ["that isn't a number", "nextSingleNumber", "abc", "Bitte eine Zahl von 181 bis 999 eingeben."],
-    ["left empty", "nextSingleNumber", " ", "Bitte eine Zahl von 181 bis 999 eingeben."],
-    ["of the singles' range for Pairs", "nextPairNumber", "999", "Bitte eine Zahl von 1001 bis 1999 eingeben."],
+    ["below the range", "nextSingleNumber", "0", "Bitte eine Zahl von 1 bis 999 eingeben."],
+    ["above the range", "nextSingleNumber", "1000", "Bitte eine Zahl von 1 bis 999 eingeben."],
+    ["that isn't a number", "nextSingleNumber", "abc", "Bitte eine Zahl von 1 bis 999 eingeben."],
+    ["left empty", "nextSingleNumber", " ", "Bitte eine Zahl von 1 bis 999 eingeben."],
+    ["of the singles' range for Pairs", "nextPairNumber", "999", "Bitte eine Zahl von 1000 bis 1999 eingeben."],
   ];
 
   it.each(invalid)("refuses a value %s with a message, keeps what was typed and changes nothing", async (_, field, typed, message) => {
@@ -100,20 +127,18 @@ describe("Setting a Next number", () => {
 });
 
 describe("Sending the count back", () => {
-  const settings = { name: "Stundenlauf", date: "2026-12-09", firstSingleNumber: "181", firstPairNumber: "1001" };
-
   it("asks first, listing the free numbers it would hand out again; confirmed, the count goes on from there (a First number typo)", async () => {
     const race = await newRace("Stundenlauf", "2026-12-09", { firstSingleNumber: 995 });
     for (let i = 0; i < 5; i++) await submit(race, single()); // 995–999
     expect((await submit(race, single())).status).toBe(409);
-    await postSettings(race, settings);
 
     const asked = await postNextNumbers(race, { ...(await nextNumbersForm(race)), nextSingleNumber: "181" });
 
     expect(asked.status).toBe(200);
     const question = await asked.text();
     expect(pageText(question)).toContain(
-      "Diese Startnummern sind frei und werden wieder vergeben: Einzelne: 181–994 Ist eine davon schon ausgegeben, bitte vorher sperren.",
+      "Diese Startnummern sind frei und werden dann wieder vergeben: Einzelne: 181–994 " +
+        "Meist gehörten sie zu gelöschten Anmeldungen. Ist eine davon noch im Umlauf, bitte erst sperren.",
     );
     expect(links(question)).toContainEqual({ text: "Abbrechen", href: `${settingsPath(race)}#next` });
     // Nothing changes before the Admin confirms.
@@ -126,11 +151,24 @@ describe("Sending the count back", () => {
     expect(await numberOf(await submit(race, single()))).toBe(182);
   });
 
+  it("goes below where the Race's numbering began, asking first even before anyone registered; Registrations keep their numbers", async () => {
+    const race = await newRace("Stundenlauf", "2026-12-09", { firstSingleNumber: 181 });
+
+    const question = await (await postNextNumbers(race, { ...(await nextNumbersForm(race)), nextSingleNumber: "150" })).text();
+    expect(pageText(question)).toContain("wieder vergeben: Einzelne: 150–180");
+    // Nothing changes before the Admin confirms.
+    expect(await numberOf(await submit(race, single()))).toBe(181);
+
+    expect((await postNextNumbers(race, nextNumbersConfirmationOn(question)!)).status).toBe(303);
+
+    expect(await numberOf(await submit(race, single()))).toBe(150);
+    expect((await asAdmin(editPath(race, 181))).status).toBe(200);
+  });
+
   it("does the same for Pairs", async () => {
     const race = await newRace("Stundenlauf", "2026-12-09", { firstPairNumber: 1998 });
     await submit(race, pair()); // 1998
     await submit(race, pair()); // 1999
-    await postSettings(race, settings);
 
     const question = await (await postNextNumbers(race, { ...(await nextNumbersForm(race)), nextPairNumber: "1001" })).text();
     expect(pageText(question)).toContain("wieder vergeben: Paare: 1001–1997");
@@ -147,7 +185,7 @@ describe("Sending the count back", () => {
     await postEdit(race, 7, editForm(20, 60, [anna])); // 7 is now a Previous number
 
     const question = await (await postNextNumbers(race, { ...(await nextNumbersForm(race)), nextSingleNumber: "1" })).text();
-    expect(pageText(question)).toContain("wieder vergeben: Einzelne: 2, 5 Ist eine");
+    expect(pageText(question)).toContain("wieder vergeben: Einzelne: 2, 5 Meist");
     await postNextNumbers(race, nextNumbersConfirmationOn(question)!);
 
     const numbers = [];

@@ -1,22 +1,16 @@
 // A Registration on a Reserved number before the database rule (docs/adr/0003)
 // keeps its number; the number is no longer Reserved.
 
-import { applyD1Migrations } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { expect, it } from "vitest";
 import { reservedRangesOnPage } from "./admin-html";
 import { asAdmin, editPath, settingsPath } from "./http";
+import { migrateToLatest, schemaJustBefore } from "./migrations";
 
 const RULE_MIGRATION = "0008_reserved_numbers_rule_and_previous_numbers.sql";
 
 it("keeps a Registration on its Reserved number and unreserves that number only", async () => {
-  // Back to the schema just before the migration (this file's storage is its own).
-  await env.DB.exec(
-    "DROP TABLE previous_numbers; DROP TABLE reserved_numbers; DROP TABLE participants; DROP TABLE registrations; DROP TABLE races; DROP TABLE d1_migrations;",
-  );
-  const index = env.TEST_MIGRATIONS.findIndex((m) => m.name === RULE_MIGRATION);
-  expect(index).toBeGreaterThan(0);
-  await applyD1Migrations(env.DB, env.TEST_MIGRATIONS.slice(0, index));
+  await schemaJustBefore(RULE_MIGRATION);
 
   // Erika was moved onto Reserved 13 by hand (#20); 14 is Reserved and free.
   await env.DB.batch([
@@ -32,7 +26,7 @@ it("keeps a Registration on its Reserved number and unreserves that number only"
     env.DB.prepare(`INSERT INTO reserved_numbers (race_id, number) SELECT id, 13 FROM races UNION ALL SELECT id, 14 FROM races`),
   ]);
 
-  await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
+  await migrateToLatest();
 
   const edit = await (await asAdmin(editPath("/r/altlauf234", 13))).text();
   expect(edit).toContain('value="Erika"');

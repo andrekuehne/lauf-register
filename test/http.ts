@@ -120,7 +120,7 @@ async function registrationNamedOn(path: string): Promise<string | undefined> {
   return (await res.text()).match(/name="registration" value="(\d+)"/)?.[1];
 }
 
-/** The Race's settings page (name, date, First numbers); posting to it saves. */
+/** The Race's settings page (name and date, Next numbers, Reserved numbers); posting to it saves the name and date. */
 export const settingsPath = (raceLink: string) => `${adminRacePath(raceLink)}/settings`;
 
 export function postSettings(raceLink: string, fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {

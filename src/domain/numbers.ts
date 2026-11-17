@@ -12,7 +12,7 @@ export const NUMBER_RANGES: Record<SingleOrPair, { from: number; to: number }> =
 /** A new Race's First numbers unless the Admin sets others, as on the organizers' lists. */
 export const DEFAULT_FIRST_NUMBERS: Record<SingleOrPair, number> = { single: 1, pair: 1001 };
 
-/** The Race form's First number fields, and the series each one starts. */
+/** The "Neuer Lauf" form's First number fields, and the series each one starts. */
 export const FIRST_NUMBER_FIELDS = { firstSingleNumber: "single", firstPairNumber: "pair" } as const satisfies Record<string, SingleOrPair>;
 export type FirstNumberField = keyof typeof FIRST_NUMBER_FIELDS;
 
@@ -27,6 +27,12 @@ export function numberInRange(text: string, series: SingleOrPair): number | null
   if (!/^\d{1,4}$/.test(trimmed)) return null;
   const number = Number(trimmed);
   return isInRange(number, series) ? number : null;
+}
+
+/** „Bitte eine Zahl von 1 bis 999 eingeben.“: the message for a number typed that is not one of its series' range. */
+export function rangeError(series: SingleOrPair): string {
+  const { from, to } = NUMBER_RANGES[series];
+  return `Bitte eine Zahl von ${from} bis ${to} eingeben.`;
 }
 
 /** The series of a Registration with these Participants: one is a single, two are a Pair. */

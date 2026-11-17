@@ -3,8 +3,8 @@
 // Registrations and their Participants with it (ON DELETE CASCADE): a hard
 // delete, no undo.
 
-import type { SingleOrPair } from "../domain/categories";
-import type { RaceInput } from "./race-input";
+import { lastNumberBefore, lastNumberColumn } from "../registration/next-numbers";
+import type { NewRaceInput, RaceInput } from "./race-input";
 
 export type Race = {
   id: number;
@@ -16,15 +16,9 @@ export type Race = {
   createdBy: string;
   /** Whether participants can register through the public link. New Races start closed. */
   registrationOpen: boolean;
-  /** Where singles and Pairs start counting Registration numbers. */
-  firstSingleNumber: number;
-  firstPairNumber: number;
 };
 
 export type RaceListItem = Race & { registrationCount: number };
-
-/** Where the Race's singles or its Pairs start counting. */
-export const firstNumberOf = (race: Race, series: SingleOrPair) => (series === "single" ? race.firstSingleNumber : race.firstPairNumber);
 
 type RaceRow = {
   id: number;
@@ -34,8 +28,6 @@ type RaceRow = {
   created_at: string;
   created_by: string;
   registration_open: number;
-  first_single_number: number;
-  first_pair_number: number;
 };
 
 const fromRow = (row: RaceRow): Race => ({
@@ -46,8 +38,6 @@ const fromRow = (row: RaceRow): Race => ({
   createdAt: row.created_at,
   createdBy: row.created_by,
   registrationOpen: row.registration_open === 1,
-  firstSingleNumber: row.first_single_number,
-  firstPairNumber: row.first_pair_number,
 });
 
 // Lowercase letters and digits without look-alikes (no 0/o, 1/l/i): 31 characters.
@@ -66,15 +56,23 @@ export function newRaceToken(): string {
   return token;
 }
 
-export async function createRace(db: D1Database, input: RaceInput & { createdBy: string }): Promise<Race> {
+/** Stores a new Race, the count of each series beginning at its First number. */
+export async function createRace(db: D1Database, input: NewRaceInput & { createdBy: string }): Promise<Race> {
   for (let attempt = 0; ; attempt++) {
     try {
       const row = await db
         .prepare(
-          `INSERT INTO races (token, name, date, created_by, first_single_number, first_pair_number)
+          `INSERT INTO races (token, name, date, created_by, ${lastNumberColumn("single")}, ${lastNumberColumn("pair")})
            VALUES (?, ?, ?, ?, ?, ?) RETURNING *`,
         )
-        .bind(newRaceToken(), input.name, input.date, input.createdBy, input.firstSingleNumber, input.firstPairNumber)
+        .bind(
+          newRaceToken(),
+          input.name,
+          input.date,
+          input.createdBy,
+          lastNumberBefore(input.firstSingleNumber),
+          lastNumberBefore(input.firstPairNumber),
+        )
         .first<RaceRow>();
       return fromRow(row!);
     } catch (error) {
@@ -102,12 +100,9 @@ export async function setRegistrationOpen(db: D1Database, token: string, open: b
   return result.meta.changes > 0;
 }
 
-/** Saves a Race's name, date and First numbers. False when there is no such Race. */
+/** Saves a Race's name and date. False when there is no such Race. */
 export async function updateRace(db: D1Database, raceId: number, input: RaceInput): Promise<boolean> {
-  const result = await db
-    .prepare("UPDATE races SET name = ?, date = ?, first_single_number = ?, first_pair_number = ? WHERE id = ?")
-    .bind(input.name, input.date, input.firstSingleNumber, input.firstPairNumber, raceId)
-    .run();
+  const result = await db.prepare("UPDATE races SET name = ?, date = ? WHERE id = ?").bind(input.name, input.date, raceId).run();
   return result.meta.changes > 0;
 }
 
