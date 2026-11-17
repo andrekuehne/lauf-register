@@ -1,13 +1,13 @@
 // The admin page of one Race (its Registrations) and the delete confirmation.
 
 import type { Context } from "hono";
-import { DIVISIONS, divisionOf, GENDER_LETTER, type Duration } from "../domain/categories";
+import { DIVISIONS, GENDER_LETTER, type Duration } from "../domain/categories";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
 import { formatRaceDateShort, formatRegistrationTime } from "../races/race-dates";
 import type { Race } from "../races/races";
 import { duplicatesOf } from "../registration/duplicates";
-import type { ParticipantInput } from "../registration/registration-input";
+import { divisionOfRegistration, type ParticipantInput } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
 import { divisionIconSvg } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
@@ -28,8 +28,6 @@ const deletePath = (race: Race, registration: StoredRegistration) => `${racePath
 
 /** The Race page lists the hour first; Divisions in their usual order (women first, singles before Pairs). */
 const DURATION_ORDER: readonly Duration[] = [60, 30];
-
-const divisionOfRegistration = (registration: StoredRegistration) => divisionOf(registration.participants.map((p) => p.gender));
 
 /** „Dr. Anna Muster“ */
 export function fullName(p: ParticipantInput): string {

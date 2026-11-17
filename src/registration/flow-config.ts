@@ -1,4 +1,23 @@
+import type { Division, Duration, Title } from "../domain/categories";
 import type { FlowStrings } from "../i18n";
+
+/** A Participant's name as the confirmation screen shows it. */
+export type ParticipantName = { title: Title; firstName: string; lastName: string };
+
+/**
+ * The answer to a successful submit: the Registration as stored, which the
+ * confirmation screen shows instead of what the phone has (a repeated submit
+ * may have sent other details than the ones stored the first time).
+ */
+export type SubmitAnswer = {
+  number: number;
+  duration: Duration;
+  division: Division;
+  /** In stored order: one, or two for a Pair. */
+  participants: ParticipantName[];
+  /** A repeated submit sent other details than the ones stored: nothing was changed. */
+  differs: boolean;
+};
 
 /** Handed from the server-rendered page to the browser flow as JSON. */
 export type FlowConfig = {

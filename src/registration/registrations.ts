@@ -4,7 +4,8 @@
 import type { Duration, SingleOrPair } from "../domain/categories";
 import { NUMBER_RANGES, seriesOf } from "../domain/numbers";
 import type { ReservedRange } from "../domain/reserved-numbers";
-import type { ParticipantInput, RegistrationContent, RegistrationInput } from "./registration-input";
+import type { SubmitAnswer } from "./flow-config";
+import { divisionOfRegistration, type ParticipantInput, type RegistrationContent, type RegistrationInput } from "./registration-input";
 
 /** A Registration as stored: its Participants in entered order. */
 export type StoredRegistration = {
@@ -19,23 +20,23 @@ export type StoredRegistration = {
   participants: ParticipantInput[];
 };
 
-export type SubmitResult = { number: number } | { closed: true } | { full: true };
+export type SubmitResult = { answer: SubmitAnswer } | { closed: true } | { full: true };
 
 /**
- * Stores a Registration and returns its Registration number, `closed` when
+ * Stores a Registration and answers with it as stored, `closed` when
  * Registration for the Race is closed, or `full` when the Registration's
  * series (singles or Pairs) has no number left. Idempotent per Race and attempt ID:
- * repeating an attempt returns the number it already got and stores nothing
- * new, even after Registration has been closed in between (the phone may
- * never have received the first answer).
+ * repeating an attempt answers with the Registration it already stored and
+ * stores nothing new, even after Registration has been closed in between (the
+ * phone may never have received the first answer).
  */
 export async function submitRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<SubmitResult> {
   for (let retry = 0; ; retry++) {
-    const existing = await findNumberByAttempt(db, raceId, input.attemptId);
-    if (existing !== null) return { number: existing };
+    const existing = await findByAttempt(db, raceId, input.attemptId);
+    if (existing) return { answer: answerFor(existing.number, existing, !sameContent(existing, input)) };
     try {
       const number = await insertRegistration(db, raceId, input);
-      if (number !== null) return { number };
+      if (number !== null) return { answer: answerFor(number, input, false) };
       const open = await db.prepare("SELECT registration_open FROM races WHERE id = ?").bind(raceId).first<number>("registration_open");
       return open === 1 ? { full: true } : { closed: true };
     } catch (error) {
@@ -226,11 +227,30 @@ export async function deleteRegistration(db: D1Database, raceId: number, registr
   return result.meta.changes > 0;
 }
 
-async function findNumberByAttempt(db: D1Database, raceId: number, attemptId: string): Promise<number | null> {
-  return db
-    .prepare("SELECT number FROM registrations WHERE race_id = ? AND attempt_id = ?")
+async function findByAttempt(db: D1Database, raceId: number, attemptId: string): Promise<StoredRegistration | null> {
+  const { results } = await db
+    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? AND r.attempt_id = ? ORDER BY p.slot`)
     .bind(raceId, attemptId)
-    .first<number>("number");
+    .all<RegistrationRow>();
+  return groupRows(results)[0] ?? null;
+}
+
+/** Whether two Registrations say exactly the same: Duration, and each Participant in the same slot. */
+function sameContent(a: RegistrationContent, b: RegistrationContent): boolean {
+  const same = (p: ParticipantInput, q: ParticipantInput) =>
+    p.gender === q.gender && p.title === q.title && p.firstName === q.firstName && p.lastName === q.lastName && p.birthYear === q.birthYear && p.club === q.club;
+  return a.duration === b.duration && a.participants.length === b.participants.length && a.participants.every((p, slot) => same(p, b.participants[slot]!));
+}
+
+/** What the confirmation screen shows of a stored Registration. */
+function answerFor(number: number, stored: RegistrationContent, differs: boolean): SubmitAnswer {
+  return {
+    number,
+    duration: stored.duration,
+    division: divisionOfRegistration(stored),
+    participants: stored.participants.map(({ title, firstName, lastName }) => ({ title, firstName, lastName })),
+    differs,
+  };
 }
 
 /** The column holding the number a Race's series handed out last (0: none yet). */

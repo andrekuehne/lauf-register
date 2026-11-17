@@ -31,6 +31,7 @@ test.describe("a Registration end to end", () => {
 
     expect(number).toBe("1");
     await expect(currentStep(page)).toContainText("Dr. Anna Muster");
+    await expect(page.getByText("Du warst schon angemeldet")).toBeHidden();
     const listed = await adminRegistration(page, race, number);
     await expect(listed).toContainText("Dr. Anna Muster");
     await expect(listed).toContainText("Frauen · Stundenlauf");
@@ -101,6 +102,40 @@ test.describe("a Registration end to end", () => {
     await expect(listed).toContainText("Ben Beispiel · m");
     await expect(listed).toContainText("Clara Probe · w");
   });
+});
+
+test("a submit whose answer got lost, sent again with a changed name: the confirmation shows the Registration as stored, with a note", async ({ page }) => {
+  const race = await newRace(page);
+  await startRegistration(page, race, ANNA_SINGLE, anna);
+  await tapNext(page);
+  // The first submit reaches the server and is stored, but its answer never reaches the phone.
+  await page.route(`**${race}/registrations`, async (route) => {
+    await route.fetch();
+    await route.abort();
+  }, { times: 1 });
+  await currentStep(page).getByRole("checkbox").check();
+  await currentStep(page).getByRole("button", { name: "Jetzt anmelden" }).tap();
+  await expect(currentStep(page).getByText("Keine Verbindung")).toBeVisible();
+
+  await currentStep(page).getByRole("button", { name: "Zurück" }).tap();
+  await currentStep(page).getByLabel("Nachname").fill("Mustermann");
+  await tapNext(page);
+  await currentStep(page).getByRole("button", { name: "Erneut senden" }).tap();
+
+  await expect(currentStep(page)).toHaveAttribute("data-step", "done");
+  const done = currentStep(page);
+  await expect(page.locator("#done-number")).toHaveText("1");
+  await expect(done).toContainText("Dr. Anna Muster");
+  await expect(done).not.toContainText("Mustermann");
+  await expect(done).toContainText("Du warst schon angemeldet. Gespeichert ist, was hier steht.");
+  await expect(page.locator("#bar-sel")).not.toContainText("Mustermann");
+  // Still the same after a reload.
+  await page.reload();
+  await expect(done).not.toContainText("Mustermann");
+  await expect(done).toContainText("Du warst schon angemeldet.");
+  const listed = await adminRegistration(page, race, "1");
+  await expect(listed).toContainText("Dr. Anna Muster");
+  await expect(listed).not.toContainText("Mustermann");
 });
 
 test.describe("entered data is kept", () => {

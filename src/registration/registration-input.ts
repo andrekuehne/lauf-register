@@ -1,7 +1,7 @@
 // The authoritative check of a submitted Registration (the browser shows the
 // same rules inline, see src/domain/participant-checks.ts).
 
-import { isDuration, isGender, isTitle, type Duration, type Gender, type Title } from "../domain/categories";
+import { divisionOf, isDuration, isGender, isTitle, type Division, type Duration, type Gender, type Title } from "../domain/categories";
 import { birthYearError, MAX_TEXT_LENGTH } from "../domain/participant-checks";
 
 export type ParticipantInput = {
@@ -22,6 +22,9 @@ export type RegistrationContent = {
 };
 
 export type RegistrationInput = RegistrationContent & { attemptId: string };
+
+/** A Registration's Division: it follows from its Participants' Genders. */
+export const divisionOfRegistration = (registration: RegistrationContent): Division => divisionOf(registration.participants.map((p) => p.gender));
 
 /** Where in the submitted JSON the problem is (e.g. "participants.1.lastName") and what's wrong. */
 export type RegistrationIssue = { path: string; message: string };

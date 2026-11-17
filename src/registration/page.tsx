@@ -213,6 +213,7 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
             <p class="done-label">{t.numberLabel}</p>
             <div class="done-number" id="done-number"></div>
           </div>
+          <p class="alert" id="done-differs" role="alert" hidden>{t.doneDiffers}</p>
           <p style="margin-top:16px">{t.deskHint}</p>
           <button type="button" class="btn btn-secondary" id="another">{t.another}</button>
           <QrButton label={qr.show} race={race} />

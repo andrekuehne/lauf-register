@@ -94,6 +94,8 @@ const de = {
     doneHeading: "Angemeldet!",
     numberLabel: "Deine Startnummer",
     deskHint: "Zeige diese Nummer am Anmeldetisch.",
+    /** A repeated submit found the Registration already stored with other details; the screen shows the stored ones. */
+    doneDiffers: "Du warst schon angemeldet. Gespeichert ist, was hier steht. Änderungen bitte am Anmeldetisch.",
     another: "Weitere Person anmelden",
   },
   /** The Race's QR code shown full screen, to let others scan it. */
@@ -183,6 +185,7 @@ const en: Strings = {
     doneHeading: "You're registered!",
     numberLabel: "Your start number",
     deskHint: "Show this number at the race desk.",
+    doneDiffers: "You were already registered. What you see here is what was saved. Please ask at the race desk for changes.",
     another: "Register someone else",
   },
   qr: {

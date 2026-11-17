@@ -49,7 +49,7 @@ export function createApp(deps: { identity: AdminIdentity }) {
     if ("closed" in submitted) return c.json({ error: "registration closed" }, 409);
     // No number left for singles or Pairs: the flow shows the same message, sending them to the Race desk.
     if ("full" in submitted) return c.json({ error: "no number left" }, 409);
-    return c.json({ number: submitted.number });
+    return c.json(submitted.answer);
   });
 
   app.notFound((c) => {

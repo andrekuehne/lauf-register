@@ -20,7 +20,7 @@ import {
   type Title,
 } from "../domain/categories";
 import { ageInRaceYear, birthYearError, isImplausibleBirthYear, parseBirthYear } from "../domain/participant-checks";
-import { FLOW_CONFIG_ID, type FlowConfig } from "../registration/flow-config";
+import { FLOW_CONFIG_ID, type FlowConfig, type ParticipantName, type SubmitAnswer } from "../registration/flow-config";
 import { fill } from "../shared/fill";
 import { divisionIconSvg } from "../ui/icon-svgs";
 
@@ -49,7 +49,8 @@ type State = {
   consent: boolean;
   /** Sent with every submit of this Registration; a repeat returns the same Registration. */
   attemptId: string;
-  result?: { number: number };
+  /** The Registration as stored, once submitted: the Done screen shows this, not what was entered. */
+  result?: SubmitAnswer;
 };
 
 /** "details" is the first (or only) person, "details-2" the second person of a Pair. */
@@ -133,10 +134,21 @@ function load(): State | null {
     saved.participants.forEach((p) => {
       if (!isTitle(p.title)) p.title = "none";
     });
+    // Not a stored Registration (e.g. saved by an older version): submitting again answers with it.
+    if (saved.result !== undefined && !asSubmitAnswer(saved.result)) delete saved.result;
     return saved;
   } catch (e) {
     return null;
   }
+}
+
+/** The submit's answer if it is one (see SubmitAnswer), else null. */
+function asSubmitAnswer(value: unknown): SubmitAnswer | null {
+  const answer = value as SubmitAnswer | null;
+  if (!answer || typeof answer.number !== "number" || !isDuration(answer.duration) || !isDivision(answer.division)) return null;
+  if (typeof answer.differs !== "boolean" || !answer.participants || answer.participants.length !== slotGenders(answer.division).length) return null;
+  const named = (p: ParticipantName) => p && isTitle(p.title) && typeof p.firstName === "string" && typeof p.lastName === "string";
+  return answer.participants.every(named) ? answer : null;
 }
 
 // ---------- derived values ----------
@@ -221,21 +233,20 @@ function furthestStep(): Step {
   return "check";
 }
 
-function displayName(p: Participant): string {
+function displayName(p: ParticipantName): string {
   const title = p.title === "none" ? "" : `${t.titles[p.title]} `;
   return `${title}${p.firstName.trim()} ${p.lastName.trim()}`;
 }
 
-function shortName(p: Participant): string {
+function shortName(p: ParticipantName): string {
   const last = p.lastName.trim();
   return `${p.firstName.trim()}${last ? ` ${last.charAt(0)}.` : ""}`;
 }
 
 /** "Mixed-Paar · Halbstundenlauf" */
-function categoryName(): string {
-  const chosen = chosenDivision();
-  if (!chosen || !state.duration) return "";
-  return `${t.divisions[chosen].category} · ${t.durations[state.duration].name}`;
+function categoryName(division: Division | undefined, duration: Duration | undefined): string {
+  if (!division || !duration) return "";
+  return `${t.divisions[division].category} · ${t.durations[duration].name}`;
 }
 
 // ---------- navigation ----------
@@ -294,8 +305,9 @@ function render(step: Step) {
   const firstRender = currentStep === undefined;
   currentStep = step;
 
-  const chosen = chosenDivision();
-  byId("flow").className = chosen ? `div-${chosen}` : "";
+  // Once submitted, the colours are the stored Division's.
+  const shown = state.result ? state.result.division : chosenDivision();
+  byId("flow").className = shown ? `div-${shown}` : "";
   all("[data-step]").forEach((section) => show(section, section.getAttribute("data-step") === step));
   renderBar(step);
   updateLanguageLinks();
@@ -315,17 +327,25 @@ function render(step: Step) {
   }
 }
 
+/** The selection bar's parts for what is known so far, each with the step that changes it. */
+function barParts(duration: Duration | undefined, singleOrPair: SingleOrPair | undefined, division: Division | undefined, names: string[]): [string, Step][] {
+  const parts: [string, Step][] = [];
+  // Short Duration names keep the one-line bar from scrolling as often.
+  if (duration) parts.push([t.durations[duration].short, "duration"]);
+  if (singleOrPair) parts.push([t.singleOrPair[singleOrPair].name, "single-or-pair"]);
+  if (division) parts.push([t.divisions[division].name, "division"]);
+  if (division && names.length) parts.push([names.join(" & "), "details"]);
+  return parts;
+}
+
 function renderBar(step: Step) {
   const bar = byId("bar-sel");
   bar.innerHTML = "";
-  const parts: [string, Step][] = [];
-  // Short Duration names keep the one-line bar from scrolling as often.
-  if (state.duration) parts.push([t.durations[state.duration].short, "duration"]);
-  if (state.singleOrPair) parts.push([t.singleOrPair[state.singleOrPair].name, "single-or-pair"]);
-  const chosen = chosenDivision();
-  if (chosen) parts.push([t.divisions[chosen].name, "division"]);
-  const names = activeParticipants().map(shortName).filter((n) => n.trim());
-  if (chosen && names.length) parts.push([names.join(" & "), "details"]);
+  // After submitting, the bar shows the Registration as stored.
+  const stored = state.result;
+  const parts = stored
+    ? barParts(stored.duration, singleOrPairOf(stored.division), stored.division, stored.participants.map(shortName))
+    : barParts(state.duration, state.singleOrPair, chosenDivision(), activeParticipants().map(shortName).filter((n) => n.trim()));
   parts.forEach((part, i) => {
     const label = part[0];
     const target = part[1];
@@ -434,7 +454,7 @@ function setError(slot: number, name: string, message: string | undefined) {
 function renderCheck() {
   const summary = byId("summary");
   summary.innerHTML = "";
-  summary.appendChild(el("p", "cat", categoryName()));
+  summary.appendChild(el("p", "cat", categoryName(chosenDivision(), state.duration)));
   activeParticipants().forEach((p, slot) => {
     const row = el("div", "sum-person");
     row.appendChild(el("span", "", slotLabel(slot, true)));
@@ -453,13 +473,15 @@ function renderCheck() {
   hideSubmitAlerts();
 }
 
+/** The Registration as stored, which may differ from what was entered (see SubmitAnswer). */
 function renderDone() {
-  const chosen = chosenDivision();
-  if (!state.result || !chosen) return;
-  byId("done-icon").innerHTML = divisionIconSvg(chosen);
-  byId("done-cat").textContent = categoryName();
-  byId("done-names").textContent = activeParticipants().map(displayName).join(" & ");
-  byId("done-number").textContent = String(state.result.number);
+  const stored = state.result;
+  if (!stored) return;
+  byId("done-icon").innerHTML = divisionIconSvg(stored.division);
+  byId("done-cat").textContent = categoryName(stored.division, stored.duration);
+  byId("done-names").textContent = stored.participants.map(displayName).join(" & ");
+  byId("done-number").textContent = String(stored.number);
+  show(byId("done-differs"), stored.differs);
 }
 
 // ---------- submit ----------
@@ -512,12 +534,13 @@ async function submit() {
       timeout(SUBMIT_TIMEOUT_MS),
     ]);
     hideSubmitAlerts();
-    if (response.ok) {
-      const body = (await response.json()) as { number: number };
-      state.result = { number: body.number };
+    const answer = response.ok ? asSubmitAnswer(await response.json()) : null;
+    if (answer) {
+      state.result = answer;
       save();
       go("done", true);
-    } else if (response.status >= 500) {
+    } else if (response.ok || response.status >= 500) {
+      // An answer the flow can't read (e.g. from another version during a deploy): sending again answers with the stored Registration.
       show(byId("offline"), true);
     } else if (response.status === 409) {
       // The Admin closed Registration after this form was opened.

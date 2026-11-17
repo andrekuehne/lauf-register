@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { anna, ben, clara, emil, registration } from "./fixtures";
-import { asAdmin, newRace, numberOf, request, setRegistration, submit } from "./http";
+import { registrationCardText } from "./admin-html";
+import { adminRacePath, asAdmin, newRace, numberOf, request, setRegistration, submit } from "./http";
 
 // Storage is shared by the tests in a file: start each test without Races
 // (deleting a Race also deletes its Registrations).
@@ -10,13 +11,36 @@ beforeEach(async () => {
 });
 
 describe("submitting a Registration", () => {
-  it("stores a single Participant and returns Registration number 1", async () => {
+  it("stores a single Participant and answers with the Registration as stored, number 1", async () => {
     const race = await newRace("Stundenlauf");
 
     const res = await submit(race, registration());
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ number: 1 });
+    expect(await res.json()).toEqual({
+      number: 1,
+      duration: 60,
+      division: "women",
+      participants: [{ title: "dr", firstName: "Anna", lastName: "Muster" }],
+      differs: false,
+    });
+  });
+
+  it("answers with a Pair's Division and both Participants in entered order", async () => {
+    const race = await newRace("Stundenlauf");
+
+    const res = await submit(race, registration({ duration: 30, participants: [ben, anna] }));
+
+    expect(await res.json()).toEqual({
+      number: 1001,
+      duration: 30,
+      division: "mixed_pair",
+      participants: [
+        { title: "none", firstName: "Ben", lastName: "Beispiel" },
+        { title: "dr", firstName: "Anna", lastName: "Muster" },
+      ],
+      differs: false,
+    });
   });
 
   it("numbers singles from 1 and Pairs from 1001, each on its own", async () => {
@@ -70,10 +94,10 @@ describe("repeating a submit", () => {
     const repeat = await submit(race, body);
     const fresh = await submit(race, registration());
 
-    expect(await first.json()).toEqual({ number: 1 });
+    expect(await numberOf(first)).toBe(1);
     expect(repeat.status).toBe(200);
-    expect(await repeat.json()).toEqual({ number: 1 });
-    expect(await fresh.json()).toEqual({ number: 2 });
+    expect(await numberOf(repeat)).toBe(1);
+    expect(await numberOf(fresh)).toBe(2);
     expect(await (await asAdmin("/admin")).text()).toContain("2 Anmeldungen");
   });
 
@@ -84,8 +108,48 @@ describe("repeating a submit", () => {
     const responses = await Promise.all([submit(race, body), submit(race, body)]);
 
     expect(responses.map((r) => r.status)).toEqual([200, 200]);
-    expect(await Promise.all(responses.map((r) => r.json()))).toEqual([{ number: 1001 }, { number: 1001 }]);
+    expect(await Promise.all(responses.map(numberOf))).toEqual([1001, 1001]);
     expect(await (await asAdmin("/admin")).text()).toContain("1 Anmeldung<");
+  });
+
+  it("answers a repeat with the same details as not differing", async () => {
+    const race = await newRace("Stundenlauf");
+    const body = registration();
+    await submit(race, body);
+
+    const repeat = await submit(race, body);
+
+    expect(await repeat.json()).toMatchObject({ number: 1, differs: false });
+  });
+
+  // The first answer never reached the phone; the Participant changed something and submitted again.
+  const changes: [string, Record<string, unknown>][] = [
+    ["a different last name", { participants: [{ ...anna, lastName: "Mustermann" }] }],
+    ["a different Duration", { duration: 30 }],
+    ["a Pair instead of a single", { participants: [anna, ben] }],
+    ["a different birth year", { participants: [{ ...anna, birthYear: 1986 }] }],
+  ];
+
+  it.each(changes)("answers a repeat with %s with the Registration as stored, says it differs, and changes nothing", async (_, change) => {
+    const race = await newRace("Stundenlauf");
+    const body = registration();
+    await submit(race, body);
+
+    const repeat = await submit(race, { ...body, ...change });
+
+    expect(repeat.status).toBe(200);
+    expect(await repeat.json()).toEqual({
+      number: 1,
+      duration: 60,
+      division: "women",
+      participants: [{ title: "dr", firstName: "Anna", lastName: "Muster" }],
+      differs: true,
+    });
+    const listed = await (await asAdmin(adminRacePath(race))).text();
+    expect(registrationCardText(listed, 1)).toContain("Dr. Anna Muster");
+    expect(registrationCardText(listed, 1)).toContain("Stundenlauf");
+    expect(registrationCardText(listed, 1)).toContain("1985");
+    expect(registrationCardText(listed, 1001)).toBe("");
   });
 
   it("treats the same attempt ID in another Race as a new Registration", async () => {
@@ -97,7 +161,7 @@ describe("repeating a submit", () => {
 
     const res = await submit(second, body);
 
-    expect(await res.json()).toEqual({ number: 1 });
+    expect(await numberOf(res)).toBe(1);
   });
 });
 
@@ -148,7 +212,7 @@ describe("validating a submit", () => {
     expect(res.status).toBe(400);
     const { issues } = (await res.json()) as { issues: { path: string; message: string }[] };
     expect(issues).toContainEqual({ path, message: expect.stringMatching(/\w{3,}/) });
-    expect(await (await submit(race, registration())).json()).toEqual({ number: 1 });
+    expect(await numberOf(await submit(race, registration()))).toBe(1);
   });
 
   it("rejects a body that isn't JSON", async () => {
@@ -220,6 +284,17 @@ describe("submitting to a closed Race", () => {
     const repeat = await submit(race, body);
 
     expect(await numberOf(repeat)).toBe(1);
+  });
+
+  it("answers a repeat with other details after closing with the Registration as stored, saying it differs", async () => {
+    const race = await newRace("Stundenlauf");
+    const body = registration();
+    await submit(race, body);
+    await setRegistration(race, false);
+
+    const repeat = await submit(race, { ...body, duration: 30 });
+
+    expect(await repeat.json()).toMatchObject({ number: 1, duration: 60, differs: true });
   });
 });
 

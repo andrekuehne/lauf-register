@@ -4,7 +4,7 @@ import { applyD1Migrations } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { expect, it } from "vitest";
 import { anna, ben, registration } from "./fixtures";
-import { submit } from "./http";
+import { numberOf, submit } from "./http";
 
 const FIRST_NUMBERS_MIGRATION = "0006_first_numbers.sql";
 
@@ -35,8 +35,8 @@ it("keeps the next single and Pair numbers of a Race stored before the migration
 
   const single = await submit("/r/altlauf234", registration({ participants: [anna] }));
   const pair = await submit("/r/altlauf234", registration({ participants: [anna, ben] }));
-  expect(await single.json()).toEqual({ number: 4 });
-  expect(await pair.json()).toEqual({ number: 1004 });
+  expect(await numberOf(single)).toBe(4);
+  expect(await numberOf(pair)).toBe(1004);
 });
 
 it("starts a Race without Pairs so far at Pair number 1001", async () => {
@@ -47,5 +47,5 @@ it("starts a Race without Pairs so far at Pair number 1001", async () => {
 
   const pair = await submit("/r/neulauf234", registration({ participants: [anna, ben] }));
 
-  expect(await pair.json()).toEqual({ number: 1001 });
+  expect(await numberOf(pair)).toBe(1001);
 });
