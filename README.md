@@ -30,7 +30,7 @@ What Admins do around a Race, in the order they need it. The main registration m
   2. Check the moment: `npx wrangler d1 time-travel info lauf-register --timestamp=2026-12-09T10:41:00+01:00` (German time in winter is `+01:00`).
   3. Restore: `npx wrangler d1 time-travel restore lauf-register --timestamp=2026-12-09T10:41:00+01:00`. It prints a bookmark that undoes the restore, should the moment have been wrong.
 
-  Time Travel reaches 30 days back on the Workers Paid plan and 7 days on Workers Free.
+  The account is on the Workers Free plan, where Time Travel reaches only 7 days back (30 on Workers Paid): restore within the week, and keep the hourly Excel exports as the backup beyond it.
 - **The app is down.** Paper forms at the Race desk, typed into RaceResult directly.
 
 ## Development
