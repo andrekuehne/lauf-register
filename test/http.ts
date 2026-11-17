@@ -51,8 +51,19 @@ export function postDelete(raceLink: string, number: number, headers: Record<str
 /** The admin form for editing a Registration; posting to it saves. */
 export const editPath = (raceLink: string, number: number) => `${adminRacePath(raceLink)}/registrations/${number}/edit`;
 
-export function postEdit(raceLink: string, number: number, fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
-  return postForm(editPath(raceLink, number), fields, headers);
+/**
+ * Posts the edit form as the browser does: unless `fields` say otherwise, with
+ * the hidden field naming the Registration, read from the form as it is now.
+ */
+export async function postEdit(raceLink: string, number: number, fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  const registration = fields.registration ?? (await editFormRegistration(raceLink, number));
+  return postForm(editPath(raceLink, number), registration === undefined ? fields : { registration, ...fields }, headers);
+}
+
+/** The hidden field naming the Registration in its edit form, as an Admin opens it now (none when it doesn't open). */
+export async function editFormRegistration(raceLink: string, number: number): Promise<string | undefined> {
+  const res = await asAdmin(editPath(raceLink, number));
+  return (await res.text()).match(/name="registration" value="(\d+)"/)?.[1];
 }
 
 /** The Race's settings page (name, date, First numbers); posting to it saves. */

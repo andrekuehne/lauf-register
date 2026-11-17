@@ -22,7 +22,7 @@ import { listReservedNumbers, removeReservedNumbers, reserveNumbers } from "../r
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
-import { checkEdit, editRegistrationPage, postedValues, storedValues } from "./edit-page";
+import { checkEdit, editRegistrationPage, numberTakenError, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
 import { confirmedNumbers, RaceFields, raceSettingsPage, reservedSectionPath, type ReservedSectionState } from "./race-settings-page";
@@ -86,6 +86,7 @@ async function racesPage(c: Context<AppEnv>, form?: { values: RaceFormValues; er
 
 const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
 const REGISTRATION_NOT_FOUND = "Diese Anmeldung gibt es nicht (mehr).";
+const REGISTRATION_RENUMBERED = "Diese Startnummer hat inzwischen eine andere Anmeldung. Bitte die Anmeldung in der Liste neu öffnen.";
 const NO_NUMBER_LEFT = "Es ist keine Startnummer mehr frei, um die betroffenen Anmeldungen neu zu nummerieren. Es wurde nichts gesperrt.";
 
 /** The typed confirmation matches the Race's name; case and spacing don't matter. */
@@ -249,12 +250,18 @@ export function adminRoutes(identity: AdminIdentity) {
 
   admin.post("/races/:token/registrations/:number/edit", (c) =>
     withRegistration(c, async (race, registration) => {
-      const values = postedValues(await c.req.parseBody());
-      const checked = checkEdit(values, raceYear(race));
+      const form = await c.req.parseBody();
+      if (form.registration !== String(registration.id)) return problemPage(c, REGISTRATION_RENUMBERED, 409);
+      const values = postedValues(form);
+      const checked = checkEdit(values, registration, raceYear(race));
       if (!checked.ok) return editRegistrationPage(c, race, registration, values, checked.errors);
+      const result = await updateRegistration(c.env.DB, race.id, registration.id, checked.number, checked.content);
       // Deleted by another Admin in the meantime: say so rather than pretend it was saved.
-      const saved = await updateRegistration(c.env.DB, race.id, registration.number, checked.content);
-      if (!saved) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
+      if (result === "not found") return problemPage(c, REGISTRATION_NOT_FOUND, 404);
+      if (result === "number taken") {
+        const other = await findRegistration(c.env.DB, race.id, checked.number);
+        return editRegistrationPage(c, race, registration, values, numberTakenError(checked.number, other));
+      }
       return c.redirect(racePath(race), 303);
     }),
   );

@@ -19,7 +19,7 @@ export function AdminPage(props: { url: string; title?: string; admin?: string; 
 }
 
 /** An admin request that can't be carried out: a short message and the way back. */
-export function problemPage(c: Context<AppEnv>, text: string, status: 400 | 404) {
+export function problemPage(c: Context<AppEnv>, text: string, status: 400 | 404 | 409) {
   return c.html(
     <AdminPage url={c.req.url} admin={c.get("adminEmail")}>
       <p class="alert">{text}</p>

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { anna, ben, clara, registration } from "./fixtures";
-import { adminRacePath, asAdmin, editPath, newRace, postEdit, request, submit } from "./http";
+import { anna, ben, clara, editForm as form, registration, type Participant } from "./fixtures";
+import { adminRacePath, asAdmin, editFormRegistration, editPath, newRace, postEdit, postReserve, request, submit } from "./http";
 import { readXlsx, type Cell } from "./xlsx";
 
 // Storage is shared by the tests in a file: start each test without Races.
@@ -9,27 +9,10 @@ beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
 });
 
-type Participant = { gender: string; title: string; firstName: string; lastName: string; birthYear: number | string; club: string | null };
-
 async function register(raceLink: string, participants: Participant[], duration = 60): Promise<number> {
   const res = await submit(raceLink, registration({ participants, duration }));
   expect(res.status).toBe(200);
   return ((await res.json()) as { number: number }).number;
-}
-
-/** The edit form's fields as the browser posts them: Duration, single or pair, then Participant 1 and 2. */
-function form(duration: number, participants: Participant[], singleOrPair = participants.length === 2 ? "pair" : "single") {
-  const fields: Record<string, string> = { duration: String(duration), singleOrPair };
-  participants.forEach((p, i) => {
-    const prefix = `p${i + 1}.`;
-    fields[`${prefix}gender`] = p.gender;
-    fields[`${prefix}title`] = p.title;
-    fields[`${prefix}firstName`] = p.firstName;
-    fields[`${prefix}lastName`] = p.lastName;
-    fields[`${prefix}birthYear`] = String(p.birthYear);
-    fields[`${prefix}club`] = p.club ?? "";
-  });
-  return fields;
 }
 
 /** The Race's export rows (without the header), keyed by StartNr: what is stored, cell by cell. */
@@ -48,8 +31,8 @@ describe("the edit form", () => {
 
     expect(res.status).toBe(200);
     const html = await res.text();
+    expect(html).toMatch(/name="number" value="1001"/);
     expect(html).toMatch(/name="duration" value="30" checked/);
-    expect(html).toMatch(/name="singleOrPair" value="pair" checked/);
     expect(html).toMatch(/name="p1.gender" value="F" checked/);
     expect(html).toMatch(/name="p1.title" value="dr" checked/);
     expect(html).toContain('value="Muster"');
@@ -65,6 +48,23 @@ describe("the edit form", () => {
 
     expect(await (await asAdmin(adminRacePath(race))).text()).toContain(`href="${editPath(race, 1)}"`);
   });
+
+  it("shows a single one Participant and a Pair two, with no choice between single and Pair", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    await register(race, [anna, ben]);
+
+    const singleForm = await (await asAdmin(editPath(race, 1))).text();
+    const pairForm = await (await asAdmin(editPath(race, 1001))).text();
+
+    expect(singleForm).toContain('name="p1.firstName"');
+    expect(singleForm).not.toContain('name="p2.firstName"');
+    expect(pairForm).toContain('name="p2.firstName"');
+    for (const html of [singleForm, pairForm]) {
+      expect(html).not.toContain('name="singleOrPair"');
+      expect(html).not.toContain("Die Startnummer bleibt gleich");
+    }
+  });
 });
 
 describe("editing a Registration", () => {
@@ -72,7 +72,7 @@ describe("editing a Registration", () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna]);
 
-    const res = await postEdit(race, 1, form(60, [{ gender: "M", title: "none", firstName: "Andreas", lastName: "Meister", birthYear: 1984, club: "TSV Süd" }]));
+    const res = await postEdit(race, 1, form(1, 60, [{ gender: "M", title: "none", firstName: "Andreas", lastName: "Meister", birthYear: 1984, club: "TSV Süd" }]));
 
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(adminRacePath(race));
@@ -83,50 +83,114 @@ describe("editing a Registration", () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna], 60);
 
-    await postEdit(race, 1, form(30, [anna]));
+    await postEdit(race, 1, form(1, 30, [anna]));
 
     expect((await stored(race)).get(1)![1]).toBe(1);
   });
 
-  it("turns a single into a Pair with a second Participant, keeping the number", async () => {
+  it("changes the Registration number to a free one of its range", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna]);
 
-    const res = await postEdit(race, 1, form(60, [anna, ben]));
+    const res = await postEdit(race, 1, form(50, 60, [anna]));
 
     expect(res.status).toBe(303);
-    expect((await stored(race)).get(1)).toEqual([1, 2, "Muster", "Anna", "Dr.", 1985, "w", "LG Nord", "Beispiel", "Ben", null, 1990, "m", null]);
-    expect(await (await asAdmin(adminRacePath(race))).text()).toContain("Mixed-Paar");
+    expect(res.headers.get("location")).toBe(adminRacePath(race));
+    const rows = await stored(race);
+    expect([...rows.keys()]).toEqual([50]);
+    expect(rows.get(50)![3]).toBe("Anna");
   });
 
-  it("refuses a Pair without a complete second Participant and changes nothing", async () => {
+  it("refuses a number another Registration of the Race has, naming it, and changes nothing (no swapping)", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna]);
+    await register(race, [ben]);
 
-    const res = await postEdit(race, 1, form(60, [anna], "pair"));
+    const res = await postEdit(race, 1, form(2, 60, [{ ...anna, firstName: "Annette" }]));
 
     expect(res.status).toBe(400);
-    expect(await res.text()).toContain("Bitte ausfüllen");
-    expect((await stored(race)).get(1)![8]).toBeNull();
+    const html = await res.text();
+    expect(html).toContain("Startnummer 2 ist schon an Ben Beispiel vergeben.");
+    expect(html).toMatch(/name="number" value="2"/);
+    expect(html).toContain('value="Annette"');
+    const rows = await stored(race);
+    expect(rows.get(1)![3]).toBe("Anna");
+    expect(rows.get(2)![3]).toBe("Ben");
   });
 
-  it("turns a Pair into a single, removing the second Participant and keeping the number", async () => {
+  it("refuses a number outside the Pairs' range 1000–1999 for a Pair", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna, ben]);
 
-    // The second Participant's fields are still in the form; "single" means they're dropped.
-    const res = await postEdit(race, 1001, form(60, [anna, ben], "single"));
+    for (const number of ["999", "2000"]) {
+      const res = await postEdit(race, 1001, { ...form(1001, 60, [anna, ben]), number });
+      expect(res.status).toBe(400);
+      expect(await res.text()).toContain("Paare haben Startnummern von 1000 bis 1999.");
+    }
+    expect([...(await stored(race)).keys()]).toEqual([1001]);
+  });
+
+  it("refuses a form opened before another Admin put a different Registration on that number, and changes nothing", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    await register(race, [ben]);
+    const bensForm = await editFormRegistration(race, 2);
+    // Meanwhile another Admin moves Ben to 50 and Anna to 2.
+    expect((await postEdit(race, 2, form(50, 60, [ben]))).status).toBe(303);
+    expect((await postEdit(race, 1, form(2, 60, [anna]))).status).toBe(303);
+
+    const res = await postEdit(race, 2, { ...form(2, 60, [{ ...ben, firstName: "Benno" }]), registration: bensForm! });
+
+    expect(res.status).toBe(409);
+    expect(await res.text()).toContain("inzwischen");
+    const rows = await stored(race);
+    expect(rows.get(2)![3]).toBe("Anna");
+    expect(rows.get(50)![3]).toBe("Ben");
+  });
+
+  it("allows a Reserved number, on purpose", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    expect((await postReserve(race, "13")).status).toBe(303);
+
+    const res = await postEdit(race, 1, form(13, 60, [anna]));
 
     expect(res.status).toBe(303);
-    expect((await stored(race)).get(1001)).toEqual([1001, 2, "Muster", "Anna", "Dr.", 1985, "w", "LG Nord", null, null, null, null, null, null]);
-    expect(await (await asAdmin(adminRacePath(race))).text()).not.toContain("Ben Beispiel");
+    expect([...(await stored(race)).keys()]).toEqual([13]);
+  });
+
+  it("refuses a second Participant for a single and changes nothing", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+
+    const res = await postEdit(race, 1, form(1, 60, [anna, ben]));
+
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain("Aus Einzeln wird kein Paar und umgekehrt.");
+    // The form shows the single as it is: one Participant.
+    expect(html).not.toContain('name="p2.firstName"');
+    expect((await stored(race)).get(1)![8]).toBeNull();
+  });
+
+  it("refuses a Pair without its second Participant and changes nothing", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna, ben]);
+
+    const res = await postEdit(race, 1001, form(1001, 60, [anna]));
+
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain("Aus Einzeln wird kein Paar und umgekehrt.");
+    expect(html).toContain('name="p2.firstName"');
+    expect((await stored(race)).get(1001)![9]).toBe("Ben");
   });
 
   it("changes a Pair's Division through the Genders (Mixed to Women's pair)", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna, ben]);
 
-    await postEdit(race, 1001, form(60, [anna, clara]));
+    await postEdit(race, 1001, form(1001, 60, [anna, clara]));
 
     const page = await (await asAdmin(adminRacePath(race))).text();
     expect(page).toContain("Frauen-Paar");
@@ -136,7 +200,10 @@ describe("editing a Registration", () => {
   const invalid: [string, Record<string, string>, string][] = [
     ["no Duration", { duration: "" }, "Bitte wählen"],
     ["an unknown Duration", { duration: "45" }, "Bitte wählen"],
-    ["neither single nor pair", { singleOrPair: "trio" }, "Bitte wählen"],
+    ["an empty number", { number: "" }, "Einzelne haben Startnummern von 1 bis 999."],
+    ["a number with a letter in it", { number: "5a" }, "Einzelne haben Startnummern von 1 bis 999."],
+    ["number 0", { number: "0" }, "Einzelne haben Startnummern von 1 bis 999."],
+    ["a number of the Pairs' range", { number: "1000" }, "Einzelne haben Startnummern von 1 bis 999."],
     ["no Gender", { "p1.gender": "" }, "Bitte wählen"],
     ["an unknown Title", { "p1.title": "prof" }, "Bitte wählen"],
     ["an empty first name", { "p1.firstName": "  " }, "Bitte ausfüllen"],
@@ -152,7 +219,7 @@ describe("editing a Registration", () => {
     await register(race, [anna]);
     const before = (await stored(race)).get(1);
 
-    const res = await postEdit(race, 1, { ...form(60, [{ ...anna, firstName: "Annette" }]), ...change });
+    const res = await postEdit(race, 1, { ...form(1, 60, [{ ...anna, firstName: "Annette" }]), ...change });
 
     expect(res.status).toBe(400);
     const html = await res.text();
@@ -165,7 +232,7 @@ describe("editing a Registration", () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna, ben]);
 
-    const res = await postEdit(race, 1001, form(60, [anna, { ...ben, birthYear: 2027, lastName: "x".repeat(101) }]));
+    const res = await postEdit(race, 1001, form(1001, 60, [anna, { ...ben, birthYear: 2027, lastName: "x".repeat(101) }]));
 
     expect(res.status).toBe(400);
     const html = await res.text();
@@ -178,7 +245,7 @@ describe("editing a Registration", () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna]);
 
-    const res = await postEdit(race, 1, { ...form(60, [anna]), "p1.birthYear": " 1986 " });
+    const res = await postEdit(race, 1, { ...form(1, 60, [anna]), "p1.birthYear": " 1986 " });
 
     expect(res.status).toBe(303);
     expect((await stored(race)).get(1)![5]).toBe(1986);
@@ -190,10 +257,10 @@ describe("editing a Registration", () => {
     await register(race, [anna]);
     await register(other, [ben, clara]);
 
-    const anonymous = await postEdit(race, 1, form(60, [ben]), {});
+    const anonymous = await postEdit(race, 1, form(1, 60, [ben]), {});
     const anonymousForm = await request(editPath(race, 1));
-    const unknown = await postEdit(race, 7, form(60, [ben]));
-    const fromOtherRace = await postEdit(race, 1001, form(60, [ben]));
+    const unknown = await postEdit(race, 7, form(7, 60, [ben]));
+    const fromOtherRace = await postEdit(race, 1001, form(1001, 60, [ben]));
     const unknownForm = await asAdmin(editPath(race, 7));
 
     expect(anonymous.status).toBe(403);

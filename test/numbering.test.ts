@@ -4,8 +4,8 @@
 
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { pairRegistration as pair, registration as single } from "./fixtures";
-import { adminRacePath, asAdmin, newRace, numberOf, postDelete, postReserve, submit } from "./http";
+import { anna, editForm, pairRegistration as pair, registration as single } from "./fixtures";
+import { adminRacePath, asAdmin, newRace, numberOf, postDelete, postEdit, postReserve, submit } from "./http";
 
 beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
@@ -33,13 +33,24 @@ describe("Registration numbers", () => {
   it("skip numbers another Registration of the Race already has", async () => {
     const race = await newRace("Stundenlauf");
     await numberOf(await submit(race, single())); // 1
-    // Until an Admin can change a number by hand, put Registrations on 2, 3 and 5 directly.
     await takeNumbers(race, [2, 3, 5]);
 
     const numbers = [];
     for (let i = 0; i < 3; i++) numbers.push(await numberOf(await submit(race, single())));
 
     expect(numbers).toEqual([4, 6, 7]);
+  });
+
+  it("go on past a number an Admin moved away, and skip the number it was moved to", async () => {
+    const race = await newRace("Stundenlauf");
+    for (let i = 0; i < 5; i++) await submit(race, single()); // 1–5
+    expect((await postEdit(race, 5, editForm(50, 60, [anna]))).status).toBe(303);
+
+    const numbers = [];
+    for (let i = 0; i < 46; i++) numbers.push(await numberOf(await submit(race, single())));
+
+    // 6–49, then past 50: 5 is never given out again.
+    expect(numbers).toEqual([...Array.from({ length: 44 }, (_, i) => 6 + i), 51, 52]);
   });
 
   it("skip Reserved numbers in both series", async () => {

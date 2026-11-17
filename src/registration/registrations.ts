@@ -2,12 +2,14 @@
 // listing a Race's Registrations, and editing or deleting one.
 
 import type { Duration, SingleOrPair } from "../domain/categories";
-import { NUMBER_RANGES } from "../domain/numbers";
+import { NUMBER_RANGES, seriesOf } from "../domain/numbers";
 import type { ReservedRange } from "../domain/reserved-numbers";
 import type { ParticipantInput, RegistrationContent, RegistrationInput } from "./registration-input";
 
 /** A Registration as stored: its Participants in entered order. */
 export type StoredRegistration = {
+  /** Stays the same when the Registration number changes. */
+  id: number;
   number: number;
   duration: Duration;
   /** ISO timestamp (UTC) of the submit. */
@@ -44,6 +46,7 @@ export async function submitRegistration(db: D1Database, raceId: number, input: 
 }
 
 type RegistrationRow = {
+  id: number;
   number: number;
   duration: Duration;
   created_at: string;
@@ -56,7 +59,7 @@ type RegistrationRow = {
 };
 
 const REGISTRATIONS_WITH_PARTICIPANTS = `
-  SELECT r.number, r.duration, r.created_at, p.gender, p.title, p.first_name, p.last_name, p.birth_year, p.club
+  SELECT r.id, r.number, r.duration, r.created_at, p.gender, p.title, p.first_name, p.last_name, p.birth_year, p.club
   FROM registrations r JOIN participants p ON p.registration_id = r.id`;
 
 /** One Registration per number, Participants in slot order (rows must come sorted by Registration, then slot). */
@@ -64,8 +67,8 @@ function groupRows(rows: RegistrationRow[]): StoredRegistration[] {
   const registrations: StoredRegistration[] = [];
   for (const row of rows) {
     let current = registrations[registrations.length - 1];
-    if (!current || current.number !== row.number) {
-      current = { number: row.number, duration: row.duration, createdAt: row.created_at, participants: [] };
+    if (!current || current.id !== row.id) {
+      current = { id: row.id, number: row.number, duration: row.duration, createdAt: row.created_at, participants: [] };
       registrations.push(current);
     }
     current.participants.push({
@@ -134,19 +137,33 @@ export async function findRegistration(db: D1Database, raceId: number, number: n
   return groupRows(results)[0] ?? null;
 }
 
+export type UpdateResult = "saved" | "not found" | "number taken";
+
 /**
- * Replaces a Registration's Duration and Participants in one transaction (a
- * Pair may become a single or the other way round). The Registration number
- * stays. False when the Race has no such Registration.
+ * Sets the Registration's number, Duration and Participants, in one
+ * transaction; found by its id, as its number may change meanwhile. `not
+ * found` when the Race has no such Registration, `number taken` (nothing
+ * saved) when another of its Registrations has `number`. The count is left as
+ * it is: it skips the new number when it gets there and never comes back to the old one.
  */
-export async function updateRegistration(db: D1Database, raceId: number, number: number, content: RegistrationContent): Promise<boolean> {
-  const where = "race_id = ? AND number = ?";
-  const [updated] = await db.batch([
-    db.prepare(`UPDATE registrations SET duration = ? WHERE ${where}`).bind(content.duration, raceId, number),
-    db.prepare(`DELETE FROM participants WHERE registration_id = (SELECT id FROM registrations WHERE ${where})`).bind(raceId, number),
-    ...insertParticipants(db, content.participants, where, [raceId, number]),
-  ]);
-  return updated!.meta.changes > 0;
+export async function updateRegistration(
+  db: D1Database,
+  raceId: number,
+  registrationId: number,
+  number: number,
+  content: RegistrationContent,
+): Promise<UpdateResult> {
+  try {
+    const [updated] = await db.batch([
+      db.prepare("UPDATE registrations SET number = ?, duration = ? WHERE race_id = ? AND id = ?").bind(number, content.duration, raceId, registrationId),
+      db.prepare("DELETE FROM participants WHERE registration_id = ?").bind(registrationId),
+      ...insertParticipants(db, content.participants, "race_id = ? AND id = ?", [raceId, registrationId]),
+    ]);
+    return updated!.meta.changes > 0 ? "saved" : "not found";
+  } catch (error) {
+    if (String(error).includes("UNIQUE constraint failed: registrations.race_id, registrations.number")) return "number taken";
+    throw error;
+  }
 }
 
 /** Statements storing Participants, in slot order, on the Registration that `where` (with `binds`) selects. */
@@ -176,8 +193,6 @@ async function findNumberByAttempt(db: D1Database, raceId: number, attemptId: st
     .bind(raceId, attemptId)
     .first<number>("number");
 }
-
-const seriesOf = (participants: readonly unknown[]): SingleOrPair => (participants.length === 2 ? "pair" : "single");
 
 /** The column holding the number a Race's series handed out last (0: none yet). */
 const lastNumberColumn = (series: SingleOrPair) => `last_${series}_number`;

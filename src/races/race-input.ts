@@ -1,7 +1,7 @@
 // Validation of the Race form: "new Race" on the admin start page and the Race settings page.
 
 import type { SingleOrPair } from "../domain/categories";
-import { DEFAULT_FIRST_NUMBERS, FIRST_NUMBER_FIELDS, isInRange, NUMBER_RANGES, type FirstNumberField } from "../domain/numbers";
+import { DEFAULT_FIRST_NUMBERS, FIRST_NUMBER_FIELDS, NUMBER_RANGES, numberInRange, type FirstNumberField } from "../domain/numbers";
 
 export const MAX_RACE_NAME_LENGTH = 100;
 
@@ -44,20 +44,13 @@ export function validateRaceInput(raw: Record<string, unknown>): { ok: true; inp
   if (!isIsoDate(values.date)) errors.date = "Bitte ein gültiges Datum wählen.";
   const firstNumbers: Partial<Record<FirstNumberField, number>> = {};
   for (const field of FIRST_NUMBER_FIELDS_LIST) {
-    const number = firstNumber(values[field], FIRST_NUMBER_FIELDS[field]);
+    const number = numberInRange(values[field], FIRST_NUMBER_FIELDS[field]);
     if (number === null) errors[field] = rangeError(FIRST_NUMBER_FIELDS[field]);
     else firstNumbers[field] = number;
   }
   const { firstSingleNumber, firstPairNumber } = firstNumbers;
   if (Object.keys(errors).length > 0 || firstSingleNumber === undefined || firstPairNumber === undefined) return { ok: false, values, errors };
   return { ok: true, input: { name: values.name, date: values.date, firstSingleNumber, firstPairNumber } };
-}
-
-/** A First number of the series, or null when the text isn't a whole number within the series' range. */
-function firstNumber(value: string, series: SingleOrPair): number | null {
-  if (!/^\d+$/.test(value)) return null;
-  const number = Number(value);
-  return isInRange(number, series) ? number : null;
 }
 
 function rangeError(series: SingleOrPair): string {

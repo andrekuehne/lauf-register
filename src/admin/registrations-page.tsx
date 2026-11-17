@@ -36,6 +36,9 @@ export function fullName(p: ParticipantInput): string {
   return `${p.title === "none" ? "" : `${t.titles[p.title]} `}${p.firstName} ${p.lastName}`;
 }
 
+/** „Erika Muster“, or „Anna Muster und Ben Beispiel“ for a Pair. */
+export const participantNames = (registration: StoredRegistration) => registration.participants.map(fullName).join(" und ");
+
 /** One Registration: number, Category in its colour, time, and each Participant with any duplicate flag. */
 function RegistrationCard(props: {
   race: Race;

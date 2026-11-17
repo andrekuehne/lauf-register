@@ -13,7 +13,7 @@ import type { Race } from "../races/races";
 import type { StoredRegistration } from "../registration/registrations";
 import type { Move } from "../registration/reserved-numbers";
 import { AdminPage } from "./admin-page";
-import { fullName, racePath, settingsPath } from "./registrations-page";
+import { participantNames, racePath, settingsPath } from "./registrations-page";
 
 function FirstNumberInput(props: { name: FirstNumberField; label: string; values: RaceFormValues; errors: RaceInputErrors }) {
   const { from, to } = NUMBER_RANGES[FIRST_NUMBER_FIELDS[props.name]];
@@ -70,8 +70,6 @@ export type ReservedSectionState = {
   /** The new numbers of Registrations that were on numbers just reserved. */
   moves?: Move[];
 };
-
-const participantNames = (registration: StoredRegistration) => registration.participants.map(fullName).join(" und ");
 
 /** „Startnummer 23 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.“ */
 function takenLine(registration: StoredRegistration): string {

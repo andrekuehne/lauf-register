@@ -20,3 +20,14 @@ export function isInRange(number: number, series: SingleOrPair): boolean {
   const range = NUMBER_RANGES[series];
   return Number.isInteger(number) && number >= range.from && number <= range.to;
 }
+
+/** A number of the series' range typed into a form (spaces around don't matter), or null when the text is none. */
+export function numberInRange(text: string, series: SingleOrPair): number | null {
+  const trimmed = text.trim();
+  if (!/^\d{1,4}$/.test(trimmed)) return null;
+  const number = Number(trimmed);
+  return isInRange(number, series) ? number : null;
+}
+
+/** The series of a Registration with these Participants: one is a single, two are a Pair. */
+export const seriesOf = (participants: readonly unknown[]): SingleOrPair => (participants.length === 2 ? "pair" : "single");
