@@ -16,7 +16,7 @@ import { SEARCH_ATTRIBUTES, SEARCH_FIELD_ID, searchKeys } from "../shared/regist
 import { divisionIconSvg } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
 import { QrButton, QrLayers } from "../ui/qr-layer";
-import { AdminPage, registrationCount, SERIES_NAMES } from "./admin-page";
+import { AdminPage, registrationCount, RegistrationField, SERIES_NAMES } from "./admin-page";
 import { RegistrationToggle } from "./registration-toggle";
 
 const t = strings("de").flow;
@@ -240,8 +240,7 @@ export function deleteRegistrationPage(c: Context<AppEnv>, race: Race, registrat
       </ul>
       <p>Die Anmeldung und alle Angaben dazu werden gelöscht. Die Startnummer {registration.number} wird nicht neu vergeben.</p>
       <form method="post" action={deleteRegistrationPath(race, registration)}>
-        {/* Which Registration this is, should another one get its number before confirming. */}
-        <input type="hidden" name="registration" value={String(registration.id)} />
+        <RegistrationField registration={registration} />
         <button type="submit" class="btn btn-danger">Endgültig löschen</button>
       </form>
       <p class="cancel"><a href={racePath(race)}>Abbrechen</a></p>

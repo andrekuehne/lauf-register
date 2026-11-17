@@ -140,7 +140,7 @@ describe("editing a Registration", () => {
     expect([...(await stored(race)).keys()]).toEqual([1001]);
   });
 
-  it("refuses a form opened before another Admin put a different Registration on that number, and changes nothing", async () => {
+  it("names the new number of a Registration whose Previous number another Registration has now, links to its form there, and changes nothing", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna]);
     await register(race, [ben]);
@@ -152,10 +152,28 @@ describe("editing a Registration", () => {
     const res = await postEdit(race, 2, { ...form(2, 60, [{ ...ben, firstName: "Benno" }]), registration: bensForm! });
 
     expect(res.status).toBe(409);
-    expect(await res.text()).toContain("inzwischen");
+    const html = await res.text();
+    expect(pageText(html)).toContain("Diese Anmeldung hat inzwischen die Startnummer 50.");
+    expect(links(html)).toContainEqual({ text: "Anmeldung 50 bearbeiten", href: editPath(race, 50) });
     const rows = await stored(race);
     expect(rows.get(2)![3]).toBe("Anna");
     expect(rows.get(50)![3]).toBe("Ben");
+  });
+
+  it("says a Registration deleted since its form was opened is gone, also when another Registration has its number now", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    await register(race, [ben]);
+    const bensForm = await editFormRegistration(race, 2);
+    // Meanwhile another Admin deletes Ben and moves Anna to 2.
+    expect((await postDelete(race, 2)).status).toBe(303);
+    expect((await postEdit(race, 1, form(2, 60, [anna]))).status).toBe(303);
+
+    const res = await postEdit(race, 2, { ...form(2, 60, [ben]), registration: bensForm! });
+
+    expect(res.status).toBe(404);
+    expect(pageText(await res.text())).toContain("Diese Anmeldung gibt es nicht (mehr).");
+    expect((await stored(race)).get(2)![3]).toBe("Anna");
   });
 
   it("names the new number of a Registration renumbered since its form was opened, links to its form there, and changes nothing", async () => {

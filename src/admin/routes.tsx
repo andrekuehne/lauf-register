@@ -23,7 +23,7 @@ import { numbersLeft, setNextNumbers } from "../registration/next-numbers";
 import { nextAndReservedNumbers, removeReservedNumbers, reserveNumbers, type NextAndReserved } from "../registration/reserved-numbers";
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
-import { AdminPage, problemPage, registrationCount } from "./admin-page";
+import { AdminPage, problemPage, REGISTRATION_FIELD, registrationCount } from "./admin-page";
 import { checkEdit, editHeading, editRegistrationPage, numberReservedError, numberTakenError, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
@@ -118,7 +118,6 @@ async function raceCards(db: D1Database): Promise<RaceCard[]> {
 
 const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
 const REGISTRATION_NOT_FOUND = "Diese Anmeldung gibt es nicht (mehr).";
-const NUMBER_NOW_ANOTHERS = "Diese Startnummer hat inzwischen eine andere Anmeldung. Bitte die Anmeldung in der Liste neu öffnen.";
 const NO_NUMBER_LEFT = "Es ist keine Startnummer mehr frei, um die betroffenen Anmeldungen neu zu nummerieren. Es wurde nichts gesperrt.";
 
 /** The typed confirmation matches the Race's name; case and spacing don't matter. */
@@ -143,11 +142,8 @@ function withRegistration(c: Context<AppEnv>, then: (race: Race, registration: S
   });
 }
 
-/**
- * The Registration a posted edit form or delete confirmation was opened for:
- * the id in its hidden field, whatever number the Registration has now.
- */
-const formRegistrationId = (form: Record<string, unknown>) => wholeNumber(form.registration);
+/** The Registration a posted edit form or delete confirmation was opened for: the id in its RegistrationField. */
+const formRegistrationId = (form: Record<string, unknown>) => wholeNumber(form[REGISTRATION_FIELD]);
 
 /** A page with a form posted for one Registration, and how a link to it under the Registration's new number reads. */
 type FormPage = { path: (race: Race, registration: StoredRegistration) => string; link: (number: number) => string };
@@ -158,9 +154,9 @@ const DELETE_PAGE: FormPage = { path: deleteRegistrationPath, link: (number) => 
 /**
  * Runs `then` with the Race, the Registration named by the URL and the form
  * posted from its `page`, when the form was opened for that Registration.
- * Otherwise nothing is changed, and the answer says why: the Registration got a
- * new number since (409, with a link to the page under it), another
- * Registration has the URL's number now (409), or it is gone (404).
+ * Otherwise nothing is changed, and the answer says what happened to the
+ * Registration the form was opened for, whoever has the URL's number now: it
+ * got a new number (409, with a link to the page under it), or it is gone (404).
  */
 function withPostedForm(
   c: Context<AppEnv>,
@@ -171,7 +167,6 @@ function withPostedForm(
     const [form, registration] = await Promise.all([c.req.parseBody(), registrationOfUrl(c, race)]);
     const id = formRegistrationId(form);
     if (registration && registration.id === id) return then(race, registration, form);
-    if (registration) return problemPage(c, NUMBER_NOW_ANOTHERS, 409);
     const moved = id === null ? null : await findRegistrationById(c.env.DB, race.id, id);
     if (!moved) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
     return problemPage(c, `Diese Anmeldung hat inzwischen die Startnummer ${moved.number}.`, 409, {

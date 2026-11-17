@@ -182,7 +182,7 @@ describe("deleting a Registration", () => {
     expect(await register(race, [ben])).toBe(2);
   });
 
-  it("deletes nobody when another Registration got the number since the confirmation was opened", async () => {
+  it("deletes nobody, naming the new number with a link to its confirmation there, when another Registration got its Previous number since", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna]);
     await register(race, [ben]);
@@ -194,7 +194,9 @@ describe("deleting a Registration", () => {
     const res = await postDelete(race, 2, { registration: bensConfirmation });
 
     expect(res.status).toBe(409);
-    expect(await res.text()).toContain("Diese Startnummer hat inzwischen eine andere Anmeldung.");
+    const html = await res.text();
+    expect(pageText(html)).toContain("Diese Anmeldung hat inzwischen die Startnummer 50.");
+    expect(links(html)).toContainEqual({ text: "Anmeldung 50 löschen …", href: deletePath(race, 50) });
     const rows = await registrationRows(race);
     expect(rows.get(2)).toContain("Anna");
     expect(rows.get(50)).toContain("Ben");
@@ -228,6 +230,22 @@ describe("deleting a Registration", () => {
 
     expect(res.status).toBe(404);
     expect(pageText(await res.text())).toContain("Diese Anmeldung gibt es nicht (mehr).");
+  });
+
+  it("says a Registration deleted since the confirmation was opened is gone, also when another Registration has its number now", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    await register(race, [ben]);
+    const bensConfirmation = await deleteFormRegistration(race, 2);
+    // Meanwhile another Admin deletes Ben and moves Anna to 2.
+    expect((await postDelete(race, 2)).status).toBe(303);
+    expect((await postEdit(race, 1, editForm(2, 60, [anna]))).status).toBe(303);
+
+    const res = await postDelete(race, 2, { registration: bensConfirmation });
+
+    expect(res.status).toBe(404);
+    expect(pageText(await res.text())).toContain("Diese Anmeldung gibt es nicht (mehr).");
+    expect((await registrationRows(race)).get(2)).toContain("Anna");
   });
 
   it("says nothing about another Race's Registration named by a confirmation, and deletes nobody", async () => {

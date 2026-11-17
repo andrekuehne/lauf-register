@@ -5,6 +5,7 @@ import type { SingleOrPair } from "../domain/categories";
 import { confirmBundle } from "../generated/confirm-bundle";
 import type { AppEnv } from "../language";
 import { Layout } from "../layout";
+import type { StoredRegistration } from "../registration/registrations";
 
 // The admin area is German only.
 
@@ -30,6 +31,17 @@ export function problemPage(c: Context<AppEnv>, text: string, status: 400 | 404 
     status,
   );
 }
+
+/** The name of the hidden field that says which Registration an edit form or delete confirmation is for. */
+export const REGISTRATION_FIELD = "registration";
+
+/**
+ * The hidden field naming the form's Registration by its id, whatever number it
+ * has by the time the form is posted (see withPostedForm in routes.tsx).
+ */
+export const RegistrationField = (props: { registration: StoredRegistration }) => (
+  <input type="hidden" name={REGISTRATION_FIELD} value={String(props.registration.id)} />
+);
 
 /** Series as the admin pages' notices name them. */
 export const SERIES_NAMES: Record<SingleOrPair, string> = { single: "Einzelne", pair: "Paare" };

@@ -11,7 +11,7 @@ import type { AppEnv } from "../language";
 import type { Race } from "../races/races";
 import { validateRegistrationEdit, type RegistrationContent, type RegistrationIssue } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
-import { AdminPage, SERIES_NAMES } from "./admin-page";
+import { AdminPage, RegistrationField, SERIES_NAMES } from "./admin-page";
 import { editPath, participantNames, racePath } from "./registrations-page";
 
 const t = strings("de").flow;
@@ -204,8 +204,7 @@ export function editRegistrationPage(c: Context<AppEnv>, race: Race, registratio
       <h1>{editHeading(registration.number)}</h1>
       {invalid && <p class="alert" role="alert">{errors.form ?? "Bitte die markierten Angaben prüfen."}</p>}
       <form method="post" action={editPath(race, registration)} novalidate>
-        {/* Which Registration this form is for, should another one get its number before saving. */}
-        <input type="hidden" name="registration" value={String(registration.id)} />
+        <RegistrationField registration={registration} />
         <div class="card">
           <TextField name="number" label="Startnummer" value={values.number} errors={errors} digits={4} />
           <div class="field">
