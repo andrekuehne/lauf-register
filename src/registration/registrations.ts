@@ -167,10 +167,16 @@ const isNumberTaken = (error: unknown) => String(error).includes("UNIQUE constra
 /** Whether a write failed because it would have put a Registration on a Reserved number (the database refuses that, docs/adr/0003). */
 export const isOnReservedNumber = (error: unknown) => String(error).includes("Registration on a Reserved number");
 
-export async function findRegistration(db: D1Database, raceId: number, number: number): Promise<StoredRegistration | null> {
+/** The Race's Registration with this number; null when it has none. */
+export const findRegistration = (db: D1Database, raceId: number, number: number) => findOne(db, raceId, "number", number);
+
+/** The Race's Registration with this id, whatever its number is now; null when it has none such. */
+export const findRegistrationById = (db: D1Database, raceId: number, id: number) => findOne(db, raceId, "id", id);
+
+async function findOne(db: D1Database, raceId: number, by: "id" | "number", value: number): Promise<StoredRegistration | null> {
   const { results } = await db
-    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? AND r.number = ? ORDER BY p.slot`)
-    .bind(raceId, number)
+    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? AND r.${by} = ? ORDER BY p.slot`)
+    .bind(raceId, value)
     .all<RegistrationRow>();
   return groupRows(results)[0] ?? null;
 }

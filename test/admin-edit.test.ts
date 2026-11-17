@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { anna, ben, clara, editForm as form, registration, type Participant } from "./fixtures";
-import { adminRacePath, asAdmin, editFormRegistration, editPath, newRace, postEdit, postReserve, request, submit } from "./http";
+import { links, pageText } from "./admin-html";
+import { adminRacePath, asAdmin, editFormRegistration, editPath, newRace, postDelete, postEdit, postReserve, request, reserveConfirmed, submit } from "./http";
 import { readXlsx, type Cell } from "./xlsx";
 
 // Storage is shared by the tests in a file: start each test without Races.
@@ -146,6 +147,36 @@ describe("editing a Registration", () => {
     const rows = await stored(race);
     expect(rows.get(2)![3]).toBe("Anna");
     expect(rows.get(50)![3]).toBe("Ben");
+  });
+
+  it("names the new number of a Registration renumbered since its form was opened, links to its form there, and changes nothing", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    await register(race, [ben]);
+    const bensForm = await editFormRegistration(race, 2);
+    // Meanwhile 2 is Reserved: Ben moves to 3.
+    await reserveConfirmed(race, "2");
+    expect((await stored(race)).get(3)![3]).toBe("Ben");
+
+    const res = await postEdit(race, 2, { ...form(2, 60, [{ ...ben, firstName: "Benno" }]), registration: bensForm! });
+
+    expect(res.status).toBe(409);
+    const html = await res.text();
+    expect(pageText(html)).toContain("Diese Anmeldung hat inzwischen die Startnummer 3.");
+    expect(links(html)).toContainEqual({ text: "Anmeldung 3 bearbeiten", href: editPath(race, 3) });
+    expect((await stored(race)).get(3)![3]).toBe("Ben");
+  });
+
+  it("says a Registration deleted since its form was opened is gone", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    const annasForm = await editFormRegistration(race, 1);
+    expect((await postDelete(race, 1)).status).toBe(303);
+
+    const res = await postEdit(race, 1, { ...form(1, 60, [anna]), registration: annasForm! });
+
+    expect(res.status).toBe(404);
+    expect(pageText(await res.text())).toContain("Diese Anmeldung gibt es nicht (mehr).");
   });
 
   it("refuses a Reserved number and changes nothing: it is kept away from Participants", async () => {

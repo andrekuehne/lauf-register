@@ -14,6 +14,7 @@ import {
   countRegistrations,
   deleteRegistration,
   findRegistration,
+  findRegistrationById,
   listRegistrations,
   updateRegistration,
   type StoredRegistration,
@@ -23,7 +24,7 @@ import { nextAndReservedNumbers, removeReservedNumbers, reserveNumbers, type Nex
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
-import { checkEdit, editRegistrationPage, numberReservedError, numberTakenError, postedValues, storedValues } from "./edit-page";
+import { checkEdit, editHeading, editRegistrationPage, numberReservedError, numberTakenError, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
 import {
@@ -35,7 +36,16 @@ import {
   type ReservedSectionState,
 } from "./race-settings-page";
 import { RegistrationToggle } from "./registration-toggle";
-import { deleteRacePage, deleteRegistrationPage, nextNumbersSectionPath, racePath, raceRegistrationsPage, settingsPath } from "./registrations-page";
+import {
+  deleteRacePage,
+  deleteRegistrationPage,
+  deleteRegistrationPath,
+  editPath,
+  nextNumbersSectionPath,
+  racePath,
+  raceRegistrationsPage,
+  settingsPath,
+} from "./registrations-page";
 
 const qrStrings = strings("de").qr;
 
@@ -108,7 +118,7 @@ async function raceCards(db: D1Database): Promise<RaceCard[]> {
 
 const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
 const REGISTRATION_NOT_FOUND = "Diese Anmeldung gibt es nicht (mehr).";
-const REGISTRATION_RENUMBERED = "Diese Startnummer hat inzwischen eine andere Anmeldung. Bitte die Anmeldung in der Liste neu öffnen.";
+const NUMBER_NOW_ANOTHERS = "Diese Startnummer hat inzwischen eine andere Anmeldung. Bitte die Anmeldung in der Liste neu öffnen.";
 const NO_NUMBER_LEFT = "Es ist keine Startnummer mehr frei, um die betroffenen Anmeldungen neu zu nummerieren. Es wurde nichts gesperrt.";
 
 /** The typed confirmation matches the Race's name; case and spacing don't matter. */
@@ -116,23 +126,60 @@ function sameName(typed: unknown, name: string): boolean {
   return typeof typed === "string" && normalizedText(typed) === normalizedText(name);
 }
 
-/** A Registration number from the URL, or null when it isn't one. */
-const registrationNumber = (param: string) => (/^\d{1,9}$/.test(param) ? Number(param) : null);
+/** A whole number written in digits (a Registration number from the URL, a Registration id from a form), or null when it isn't one. */
+const wholeNumber = (value: unknown) => (typeof value === "string" && /^\d{1,9}$/.test(value) ? Number(value) : null);
+
+/** The Race's Registration with the URL's number, or null. */
+async function registrationOfUrl(c: Context<AppEnv>, race: Race): Promise<StoredRegistration | null> {
+  const number = wholeNumber(c.req.param("number"));
+  return number === null ? null : findRegistration(c.env.DB, race.id, number);
+}
 
 /** Runs `then` with the Race and the Registration named by the URL, or answers 404. */
 function withRegistration(c: Context<AppEnv>, then: (race: Race, registration: StoredRegistration) => Promise<Response>): Promise<Response> {
   return withRace(c, async (race) => {
-    const number = registrationNumber(c.req.param("number") ?? "");
-    const registration = number === null ? null : await findRegistration(c.env.DB, race.id, number);
+    const registration = await registrationOfUrl(c, race);
     return registration ? then(race, registration) : problemPage(c, REGISTRATION_NOT_FOUND, 404);
   });
 }
 
 /**
- * Whether a posted edit form or delete confirmation was opened for this
- * Registration: false when another Registration has got its number since.
+ * The Registration a posted edit form or delete confirmation was opened for:
+ * the id in its hidden field, whatever number the Registration has now.
  */
-const isFormFor = (form: Record<string, unknown>, registration: StoredRegistration) => form.registration === String(registration.id);
+const formRegistrationId = (form: Record<string, unknown>) => wholeNumber(form.registration);
+
+/** A page with a form posted for one Registration, and how a link to it under the Registration's new number reads. */
+type FormPage = { path: (race: Race, registration: StoredRegistration) => string; link: (number: number) => string };
+
+const EDIT_PAGE: FormPage = { path: editPath, link: editHeading };
+const DELETE_PAGE: FormPage = { path: deleteRegistrationPath, link: (number) => `Anmeldung ${number} löschen …` };
+
+/**
+ * Runs `then` with the Race, the Registration named by the URL and the form
+ * posted from its `page`, when the form was opened for that Registration.
+ * Otherwise nothing is changed, and the answer says why: the Registration got a
+ * new number since (409, with a link to the page under it), another
+ * Registration has the URL's number now (409), or it is gone (404).
+ */
+function withPostedForm(
+  c: Context<AppEnv>,
+  page: FormPage,
+  then: (race: Race, registration: StoredRegistration, form: Record<string, unknown>) => Promise<Response>,
+): Promise<Response> {
+  return withRace(c, async (race) => {
+    const [form, registration] = await Promise.all([c.req.parseBody(), registrationOfUrl(c, race)]);
+    const id = formRegistrationId(form);
+    if (registration && registration.id === id) return then(race, registration, form);
+    if (registration) return problemPage(c, NUMBER_NOW_ANOTHERS, 409);
+    const moved = id === null ? null : await findRegistrationById(c.env.DB, race.id, id);
+    if (!moved) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
+    return problemPage(c, `Diese Anmeldung hat inzwischen die Startnummer ${moved.number}.`, 409, {
+      href: page.path(race, moved),
+      text: page.link(moved.number),
+    });
+  });
+}
 
 /**
  * The Race settings page with its Next numbers and Reserved numbers as stored;
@@ -267,8 +314,8 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
   admin.post("/races/:token/reserved/remove", (c) =>
     withRace(c, async (race) => {
       const body = await c.req.parseBody();
-      const from = registrationNumber(String(body.from ?? ""));
-      const to = registrationNumber(String(body.to ?? ""));
+      const from = wholeNumber(body.from);
+      const to = wholeNumber(body.to);
       if (from === null || to === null) return problemPage(c, "Ungültige Anfrage.", 400);
       await removeReservedNumbers(c.env.DB, race.id, { from, to });
       return c.redirect(reservedSectionPath(race), 303);
@@ -310,9 +357,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
   );
 
   admin.post("/races/:token/registrations/:number/edit", (c) =>
-    withRegistration(c, async (race, registration) => {
-      const form = await c.req.parseBody();
-      if (!isFormFor(form, registration)) return problemPage(c, REGISTRATION_RENUMBERED, 409);
+    withPostedForm(c, EDIT_PAGE, async (race, registration, form) => {
       const values = postedValues(form);
       const checked = checkEdit(values, registration, raceYear(race));
       if (!checked.ok) return editRegistrationPage(c, race, registration, values, checked.errors);
@@ -333,8 +378,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
   );
 
   admin.post("/races/:token/registrations/:number/delete", (c) =>
-    withRegistration(c, async (race, registration) => {
-      if (!isFormFor(await c.req.parseBody(), registration)) return problemPage(c, REGISTRATION_RENUMBERED, 409);
+    withPostedForm(c, DELETE_PAGE, async (race, registration) => {
       // Deleted by another Admin in the meantime: say so.
       if (!(await deleteRegistration(c.env.DB, race.id, registration.id))) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
       return c.redirect(racePath(race), 303);

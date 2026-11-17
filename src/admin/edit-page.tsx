@@ -187,6 +187,9 @@ function ParticipantFieldset(props: { n: number; pair: boolean; participant: Par
   );
 }
 
+/** „Anmeldung 12 bearbeiten“: the edit page's title, and links to it. */
+export const editHeading = (number: number) => `Anmeldung ${number} bearbeiten`;
+
 /**
  * The edit form for a Registration, filled with `values`; with errors,
  * answered as 400. It shows the Registration's own Participants, one for a
@@ -196,9 +199,9 @@ export function editRegistrationPage(c: Context<AppEnv>, race: Race, registratio
   const invalid = Object.keys(errors).length > 0;
   const pair = seriesOf(registration.participants) === "pair";
   return c.html(
-    <AdminPage url={c.req.url} title={`Anmeldung ${registration.number} bearbeiten`} admin={c.get("adminEmail")}>
+    <AdminPage url={c.req.url} title={editHeading(registration.number)} admin={c.get("adminEmail")}>
       <p><a href={racePath(race)}>← {race.name}</a></p>
-      <h1>Anmeldung {registration.number} bearbeiten</h1>
+      <h1>{editHeading(registration.number)}</h1>
       {invalid && <p class="alert" role="alert">{errors.form ?? "Bitte die markierten Angaben prüfen."}</p>}
       <form method="post" action={editPath(race, registration)} novalidate>
         {/* Which Registration this form is for, should another one get its number before saving. */}

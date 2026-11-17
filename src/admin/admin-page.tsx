@@ -19,11 +19,12 @@ export function AdminPage(props: { url: string; title?: string; admin?: string; 
   );
 }
 
-/** An admin request that can't be carried out: a short message and the way back. */
-export function problemPage(c: Context<AppEnv>, text: string, status: 400 | 404 | 409) {
+/** An admin request that can't be carried out: a short message, a `link` onward if there is one, and the way back. */
+export function problemPage(c: Context<AppEnv>, text: string, status: 400 | 404 | 409, link?: { href: string; text: string }) {
   return c.html(
     <AdminPage url={c.req.url} admin={c.get("adminEmail")}>
       <p class="alert">{text}</p>
+      {link && <p><a href={link.href}>{link.text}</a></p>}
       <p><a href="/admin">Zurück zur Übersicht</a></p>
     </AdminPage>,
     status,

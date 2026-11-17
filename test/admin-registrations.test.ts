@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
+import { links, pageText } from "./admin-html";
 import { anna, ben, clara, editForm, emil, registration } from "./fixtures";
-import { adminRacePath, asAdmin, deleteFormRegistration, deletePath, newRace, postDelete, postEdit, request, submit } from "./http";
+import { adminRacePath, asAdmin, deleteFormRegistration, deletePath, newRace, postDelete, postEdit, request, reserveConfirmed, submit } from "./http";
 
 // Storage is shared by the tests in a file: start each test without Races.
 beforeEach(async () => {
@@ -197,6 +198,50 @@ describe("deleting a Registration", () => {
     const rows = await registrationRows(race);
     expect(rows.get(2)).toContain("Anna");
     expect(rows.get(50)).toContain("Ben");
+  });
+
+  it("deletes nobody, naming the new number with a link to its confirmation there, when the Registration was renumbered since", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    await register(race, [ben]);
+    const bensConfirmation = await deleteFormRegistration(race, 2);
+    // Meanwhile 2 is Reserved: Ben moves to 3.
+    await reserveConfirmed(race, "2");
+    expect((await registrationRows(race)).get(3)).toContain("Ben");
+
+    const res = await postDelete(race, 2, { registration: bensConfirmation });
+
+    expect(res.status).toBe(409);
+    const html = await res.text();
+    expect(pageText(html)).toContain("Diese Anmeldung hat inzwischen die Startnummer 3.");
+    expect(links(html)).toContainEqual({ text: "Anmeldung 3 löschen …", href: deletePath(race, 3) });
+    expect((await registrationRows(race)).get(3)).toContain("Ben");
+  });
+
+  it("says a Registration deleted since the confirmation was opened is gone", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    const annasConfirmation = await deleteFormRegistration(race, 1);
+    expect((await postDelete(race, 1)).status).toBe(303);
+
+    const res = await postDelete(race, 1, { registration: annasConfirmation });
+
+    expect(res.status).toBe(404);
+    expect(pageText(await res.text())).toContain("Diese Anmeldung gibt es nicht (mehr).");
+  });
+
+  it("says nothing about another Race's Registration named by a confirmation, and deletes nobody", async () => {
+    const race = await newRace("Stundenlauf");
+    const other = await newRace("Anderer Lauf");
+    await register(race, [anna]);
+    await register(other, [ben]);
+    const bensConfirmation = await deleteFormRegistration(other, 1);
+
+    const res = await postDelete(race, 7, { registration: bensConfirmation });
+
+    expect(res.status).toBe(404);
+    expect(pageText(await res.text())).toContain("Diese Anmeldung gibt es nicht (mehr).");
+    expect((await registrationRows(other)).get(1)).toContain("Ben");
   });
 
   it("is only for signed-in Admins, and answers 404 for an unknown Registration", async () => {

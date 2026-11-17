@@ -33,7 +33,7 @@ export const nextNumbersSectionPath = (race: Race) => `${settingsPath(race)}#nex
 /** Below this many numbers left in a series, the Race page warns: with 1–10 registering at once, a few minutes' notice. */
 const FEW_NUMBERS_LEFT = 20;
 export const editPath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/edit`;
-const deletePath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
+export const deleteRegistrationPath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
 
 /** The Race page lists the hour first; Divisions in their usual order (women first, singles before Pairs). */
 const DURATION_ORDER: readonly Duration[] = [60, 30];
@@ -88,7 +88,7 @@ function RegistrationCard(props: {
       {props.deletable && (
         <p class="reg-actions">
           <a href={editPath(race, registration)}>Bearbeiten</a>
-          <a href={deletePath(race, registration)} class="reg-delete">
+          <a href={deleteRegistrationPath(race, registration)} class="reg-delete">
             Löschen
           </a>
         </p>
@@ -239,7 +239,7 @@ export function deleteRegistrationPage(c: Context<AppEnv>, race: Race, registrat
         <RegistrationCard race={race} registration={registration} />
       </ul>
       <p>Die Anmeldung und alle Angaben dazu werden gelöscht. Die Startnummer {registration.number} wird nicht neu vergeben.</p>
-      <form method="post" action={deletePath(race, registration)}>
+      <form method="post" action={deleteRegistrationPath(race, registration)}>
         {/* Which Registration this is, should another one get its number before confirming. */}
         <input type="hidden" name="registration" value={String(registration.id)} />
         <button type="submit" class="btn btn-danger">Endgültig löschen</button>
