@@ -2,13 +2,29 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import { expect } from "vitest";
 import { env } from "cloudflare:workers";
 import { createApp } from "../src/app";
+import { dateInRaceTimeZone } from "../src/races/race-dates";
 import type { AdminIdentity } from "../src/admin/identity";
 import { formFields } from "./admin-html";
 
-// The one allowed test double: the admin identity. A request is "signed in"
-// as whatever email the x-test-admin header names; without it, it's anonymous.
+// The two allowed test doubles: the admin identity and the clock. A request is
+// "signed in" as whatever email the x-test-admin header names; without it,
+// it's anonymous. The clock stands still at TODAY unless a test moves it (atClock).
 const testIdentity: AdminIdentity = async (c) => c.req.header("x-test-admin") ?? null;
-const app = createApp({ identity: testIdentity });
+const TEST_NOW = new Date("2025-11-01T10:00:00Z"); // 11:00 in Berlin
+/** The tests' today (2025-11-01) in the organizers' time zone: Races dated before it are in the past. */
+export const TODAY = dateInRaceTimeZone(TEST_NOW);
+let now = TEST_NOW;
+const app = createApp({ identity: testIdentity, now: () => now });
+
+/** Runs `then` with the clock at `instant` (ISO, UTC), then puts it back. */
+export async function atClock<T>(instant: string, then: () => Promise<T>): Promise<T> {
+  now = new Date(instant);
+  try {
+    return await then();
+  } finally {
+    now = TEST_NOW;
+  }
+}
 
 export const ORIGIN = "https://example.com";
 export const ADMIN = "orga@example.com";

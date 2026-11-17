@@ -11,8 +11,11 @@ import { raceNotFoundPage, registrationClosedPage, registrationPage } from "./re
 import { validateRegistrationInput } from "./registration/registration-input";
 import { submitRegistration } from "./registration/registrations";
 
-/** The whole Worker app. The admin identity is passed in so tests can substitute it (the only test double). */
-export function createApp(deps: { identity: AdminIdentity }) {
+/**
+ * The whole Worker app. The admin identity and the clock are passed in so
+ * tests can substitute them (the only test doubles, see ADR 0002).
+ */
+export function createApp(deps: { identity: AdminIdentity; now: () => Date }) {
   const app = new Hono<AppEnv>();
 
   app.use(language);
@@ -27,7 +30,7 @@ export function createApp(deps: { identity: AdminIdentity }) {
     );
   });
 
-  app.route("/admin", adminRoutes(deps.identity));
+  app.route("/admin", adminRoutes(deps.identity, deps.now));
 
   app.get("/r/:token", async (c) => {
     const race = await findRaceByToken(c.env.DB, c.req.param("token"));

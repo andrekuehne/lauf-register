@@ -5,6 +5,7 @@ import {
   ADMIN,
   adminRacePath,
   asAdmin,
+  atClock,
   newRace,
   ORIGIN,
   postRace,
@@ -12,6 +13,7 @@ import {
   request,
   setRegistration,
   setRegistrationOnRacePage,
+  TODAY,
 } from "./http";
 import { qrLayerOpenedBy, qrLayers, qrTexts } from "./qr";
 
@@ -51,6 +53,23 @@ describe("admin area", () => {
     expect(badDate.status).toBe(400);
     expect(await badDate.text()).toContain("Bitte ein gültiges Datum wählen");
     expect(await publicLinks()).toEqual([]);
+  });
+
+  it("refuses a date before today with a message and stores nothing; today is fine", async () => {
+    const yesterday = await postRace({ name: "Gestern", date: "2025-10-31" });
+
+    expect(yesterday.status).toBe(400);
+    expect(await yesterday.text()).toContain("Das Datum liegt in der Vergangenheit.");
+    expect(await publicLinks()).toEqual([]);
+    expect((await postRace({ name: "Heute", date: TODAY })).status).toBe(303);
+    expect(await publicLinks()).toHaveLength(1);
+  });
+
+  it("counts today in German time: half past midnight in Berlin is already the next day", async () => {
+    await atClock("2025-11-01T23:30:00Z", async () => {
+      expect((await postRace({ name: "Gestern", date: "2025-11-01" })).status).toBe(400);
+      expect((await postRace({ name: "Heute", date: "2025-11-02" })).status).toBe(303);
+    });
   });
 
   it("offers First numbers 1 and 1001 for a new Race and refuses ones outside their range", async () => {

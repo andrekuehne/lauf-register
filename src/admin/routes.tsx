@@ -5,7 +5,7 @@ import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
 import { parseReservedRange } from "../domain/reserved-numbers";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
-import { formatRaceDateShort, raceYear } from "../races/race-dates";
+import { dateInRaceTimeZone, formatRaceDateShort, raceYear } from "../races/race-dates";
 import { publicRacePath } from "../races/race-link";
 import { checkNextNumbers, postedNextNumbers } from "../races/next-number-input";
 import { raceFormValues, validateRaceInput, type RaceFormValues, type RaceInputErrors } from "../races/race-input";
@@ -147,8 +147,11 @@ async function withRace(c: Context<AppEnv>, then: (race: Race) => Promise<Respon
   return race ? then(race) : problemPage(c, RACE_NOT_FOUND, 404);
 }
 
-export function adminRoutes(identity: AdminIdentity) {
+/** The admin area, signed in through `identity`; `now` is the clock that says which dates are in the past. */
+export function adminRoutes(identity: AdminIdentity, now: () => Date) {
   const admin = new Hono<AppEnv>();
+  /** Today in the organizers' time zone, as the daily cleanup counts days. */
+  const today = () => dateInRaceTimeZone(now());
 
   // Cloudflare Access normally stops anonymous visitors before they get here;
   // this is the Worker's own check, so a gap in the Access setup fails closed.
@@ -172,7 +175,7 @@ export function adminRoutes(identity: AdminIdentity) {
 
   admin.post("/races", async (c) => {
     const body = await c.req.parseBody();
-    const checked = validateRaceInput(body);
+    const checked = validateRaceInput(body, { today: today() });
     if (!checked.ok) return racesPage(c, checked);
     await createRace(c.env.DB, { ...checked.input, createdBy: c.get("adminEmail") });
     return c.redirect("/admin", 303);
@@ -203,7 +206,7 @@ export function adminRoutes(identity: AdminIdentity) {
 
   admin.post("/races/:token/settings", (c) =>
     withRace(c, async (race) => {
-      const checked = validateRaceInput(await c.req.parseBody());
+      const checked = validateRaceInput(await c.req.parseBody(), { today: today(), stored: race.date });
       if (!checked.ok) return settingsPage(c, race, { form: checked });
       // Deleted by another Admin in the meantime: say so rather than pretend it was saved.
       if (!(await updateRace(c.env.DB, race.id, checked.input))) return problemPage(c, RACE_NOT_FOUND, 404);

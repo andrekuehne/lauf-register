@@ -4,7 +4,7 @@ import type { AppEnv } from "../language";
 /**
  * Who is making this admin request: the Admin's email, or null if nobody is
  * signed in. The single seam for admin identity (ADR 0002); tests substitute
- * their own implementation, and nothing else in the app is ever faked.
+ * their own implementation, and nothing else in the app is faked but the clock.
  */
 export type AdminIdentity = (c: Context<AppEnv>) => Promise<string | null>;
 

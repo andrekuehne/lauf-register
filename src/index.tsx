@@ -2,7 +2,7 @@ import { cloudflareAccessIdentity } from "./admin/identity";
 import { createApp } from "./app";
 import { deleteExpiredRaces } from "./races/cleanup";
 
-const app = createApp({ identity: cloudflareAccessIdentity });
+const app = createApp({ identity: cloudflareAccessIdentity, now: () => new Date() });
 
 export default {
   fetch: app.fetch,

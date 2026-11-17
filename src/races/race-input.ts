@@ -31,9 +31,15 @@ const FIRST_NUMBER_FIELDS_LIST = Object.keys(FIRST_NUMBER_FIELDS) as FirstNumber
 
 /**
  * Checks a posted Race form. A First number left out of the post entirely is
- * the default; one posted empty is an error like any other non-number.
+ * the default; one posted empty is an error like any other non-number. A date
+ * before `today` (ISO, in the organizers' time zone) is refused, as the daily
+ * cleanup would soon delete the Race, except the date `stored` for the Race,
+ * so a Race can still be renamed after its day.
  */
-export function validateRaceInput(raw: Record<string, unknown>): { ok: true; input: RaceInput } | { ok: false; values: RaceFormValues; errors: RaceInputErrors } {
+export function validateRaceInput(
+  raw: Record<string, unknown>,
+  dates: { today: string; stored?: string },
+): { ok: true; input: RaceInput } | { ok: false; values: RaceFormValues; errors: RaceInputErrors } {
   const text = (name: keyof RaceInput) => (typeof raw[name] === "string" ? (raw[name] as string).trim() : "");
   const values: RaceFormValues = { ...raceFormValues(), name: text("name"), date: text("date") };
   for (const field of FIRST_NUMBER_FIELDS_LIST) if (raw[field] !== undefined) values[field] = text(field);
@@ -42,6 +48,7 @@ export function validateRaceInput(raw: Record<string, unknown>): { ok: true; inp
   if (!values.name) errors.name = "Bitte einen Namen eingeben.";
   else if (values.name.length > MAX_RACE_NAME_LENGTH) errors.name = `Höchstens ${MAX_RACE_NAME_LENGTH} Zeichen.`;
   if (!isIsoDate(values.date)) errors.date = "Bitte ein gültiges Datum wählen.";
+  else if (values.date < dates.today && values.date !== dates.stored) errors.date = "Das Datum liegt in der Vergangenheit.";
   const firstNumbers: Partial<Record<FirstNumberField, number>> = {};
   for (const field of FIRST_NUMBER_FIELDS_LIST) {
     const number = numberInRange(values[field], FIRST_NUMBER_FIELDS[field]);

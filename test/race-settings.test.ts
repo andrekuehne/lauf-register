@@ -3,7 +3,24 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { anna, ben, editForm, pairRegistration as pair, registration as single } from "./fixtures";
 import { pageText, registrationCardText, reservedRangesOnPage } from "./admin-html";
 import { readXlsx } from "./xlsx";
-import { adminRacePath, asAdmin, confirmationOn, editPath, newRace, numberOf, postEdit, postReserve, postSettings, postUnreserve, request, reserveConfirmed, settingsPath, submit } from "./http";
+import {
+  adminRacePath,
+  asAdmin,
+  atClock,
+  confirmationOn,
+  editPath,
+  newRace,
+  numberOf,
+  postEdit,
+  postReserve,
+  postSettings,
+  postUnreserve,
+  request,
+  reserveConfirmed,
+  settingsPath,
+  submit,
+  TODAY,
+} from "./http";
 
 beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
@@ -48,6 +65,23 @@ describe("Race settings", () => {
     expect(html).toContain("Bitte eine Zahl von 1000 bis 1999 eingeben.");
     expect(html).toContain('value="abc"');
     expect(await numberOf(await submit(race, single()))).toBe(1);
+  });
+
+  it("refuses a date in the past, but saves a Race after its day when its date stays as it is", async () => {
+    const race = await newRace("Stundenlauf", TODAY);
+
+    const moved = await postSettings(race, settings({ date: "2025-10-31" }));
+
+    expect(moved.status).toBe(400);
+    expect(await moved.text()).toContain("Das Datum liegt in der Vergangenheit.");
+    expect(await (await asAdmin(adminRacePath(race))).text()).toContain("01.11.2025");
+
+    // The day after the Race: renaming it keeps its date, which is now in the past.
+    await atClock("2025-11-02T10:00:00Z", async () => {
+      expect((await postSettings(race, settings({ name: "Stundenlauf (vorbei)", date: TODAY }))).status).toBe(303);
+      expect((await postSettings(race, settings({ date: "2025-10-31" }))).status).toBe(400);
+    });
+    expect(await (await asAdmin(adminRacePath(race))).text()).toContain("Stundenlauf (vorbei)");
   });
 
   it("answers 404 for an unknown Race and 403 without an Admin", async () => {

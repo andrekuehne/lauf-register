@@ -93,6 +93,11 @@ async function runDailyCleanup(now: string) {
   await worker.scheduled(createScheduledController({ scheduledTime: new Date(now), cron: "0 2 * * *" }), env);
 }
 
+/** Creates a Race through the admin form; fails the test if the form refuses its date. */
+async function addRace(name: string, date: string) {
+  expect((await postRace({ name, date })).status).toBe(303);
+}
+
 describe("the daily cleanup", () => {
   it("deletes exactly the Races whose date is 30 or more days past, with their Registrations", async () => {
     for (const [name, date] of [
@@ -103,7 +108,7 @@ describe("the daily cleanup", () => {
       ["Vor 31 Tagen", "2026-12-08"],
       ["Letztes Jahr", "2025-12-09"],
     ]) {
-      await postRace({ name: name!, date: date! });
+      await addRace(name!, date!);
     }
 
     await runDailyCleanup("2027-01-08T02:00:00Z");
@@ -112,8 +117,8 @@ describe("the daily cleanup", () => {
   });
 
   it("counts days in German time: just after midnight there it is already the next day", async () => {
-    await postRace({ name: "Vor 30 Tagen", date: "2026-12-09" });
-    await postRace({ name: "Vor 31 Tagen", date: "2026-12-08" });
+    await addRace("Vor 30 Tagen", "2026-12-09");
+    await addRace("Vor 31 Tagen", "2026-12-08");
 
     await runDailyCleanup("2027-01-07T22:30:00Z"); // 23:30 in Berlin, 7 January: day 29 and 30
 
@@ -125,8 +130,8 @@ describe("the daily cleanup", () => {
   });
 
   it("counts the same way in summer time", async () => {
-    await postRace({ name: "Vor 29 Tagen", date: "2027-06-02" });
-    await postRace({ name: "Vor 30 Tagen", date: "2027-06-01" });
+    await addRace("Vor 29 Tagen", "2027-06-02");
+    await addRace("Vor 30 Tagen", "2027-06-01");
 
     await runDailyCleanup("2027-07-01T02:00:00Z"); // 04:00 in Berlin, 1 July
 
