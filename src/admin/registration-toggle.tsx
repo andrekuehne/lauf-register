@@ -9,6 +9,17 @@ import type { NextNumbers } from "../registration/next-numbers";
 import type { NextAndReserved } from "../registration/reserved-numbers";
 import { SERIES_NAMES } from "./admin-page";
 
+/**
+ * What the toggle needs besides the Race: whether Registration is open and,
+ * only while it is closed, the Next and Reserved numbers the question before
+ * opening shows. Closing asks without them, and working them out reads
+ * thousands of database rows, too many to spend on every reload on race day.
+ */
+export type ToggleState = { registrationOpen: true } | { registrationOpen: false; numbers: NextAndReserved };
+
+/** A Race with what its toggle needs. */
+export type RaceWithToggle = Race & ToggleState;
+
 /** „Einzelne 181“, or „Einzelne: keine mehr frei“ when the series has no number left. */
 const nextOf = (next: NextNumbers, series: SingleOrPair) => {
   const number = next[series];
@@ -16,25 +27,25 @@ const nextOf = (next: NextNumbers, series: SingleOrPair) => {
 };
 
 /**
- * The question asked before the change, naming the Race. Before opening, it also
- * shows where the counts continue and what is Reserved, so a Race whose First
- * numbers were never set is caught before someone gets a bib already handed out.
+ * The question asked before changing the Race's state, naming the Race. Before
+ * opening, it also shows where the counts continue and what is Reserved, so a
+ * Race whose First numbers were never set is caught before someone gets a bib
+ * already handed out.
  */
-const question = (race: Race, open: boolean, numbers: NextAndReserved) =>
-  open
-    ? [
+const question = (race: RaceWithToggle) =>
+  race.registrationOpen
+    ? `Anmeldung für ‚${race.name}‘ schließen? Neue Anmeldungen gehen dann nur noch am Anmeldetisch.`
+    : [
         `Anmeldung für ‚${race.name}‘ öffnen? Teilnehmende können sich dann über den Link anmelden.`,
-        `Nächste Startnummern: ${SINGLE_OR_PAIR.map((series) => nextOf(numbers.next, series)).join(", ")}.`,
-        `Gesperrt: ${numbers.reserved.length > 0 ? formatNumbers(numbers.reserved) : "keine"}.`,
-      ].join("\n")
-    : `Anmeldung für ‚${race.name}‘ schließen? Neue Anmeldungen gehen dann nur noch am Anmeldetisch.`;
+        `Nächste Startnummern: ${SINGLE_OR_PAIR.map((series) => nextOf(race.numbers.next, series)).join(", ")}.`,
+        `Gesperrt: ${race.numbers.reserved.length > 0 ? formatNumbers(race.numbers.reserved) : "keine"}.`,
+      ].join("\n");
 
 /**
- * The toggle for `race`, whose Next numbers and Reserved numbers are `numbers`.
- * `from: "race"` when shown on the Race's own page, so the Admin returns there
- * after the change; otherwise they return to the start page.
+ * The toggle for `race`. `from: "race"` when shown on the Race's own page, so
+ * the Admin returns there after the change; otherwise they return to the start page.
  */
-export function RegistrationToggle(props: { race: Race; numbers: NextAndReserved; from?: "race" }) {
+export function RegistrationToggle(props: { race: RaceWithToggle; from?: "race" }) {
   const { race } = props;
   const labelId = `reg-switch-${race.token}`;
   const half = (open: boolean) => {
@@ -49,7 +60,7 @@ export function RegistrationToggle(props: { race: Race; numbers: NextAndReserved
       );
     }
     return (
-      <button type="submit" class={classes} aria-pressed="false" name="open" value={open ? "1" : "0"} data-confirm={question(race, open, props.numbers)}>
+      <button type="submit" class={classes} aria-pressed="false" name="open" value={open ? "1" : "0"} data-confirm={question(race)}>
         {label}
       </button>
     );

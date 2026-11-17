@@ -5,10 +5,13 @@ import { createApp } from "../src/app";
 import { dateInRaceTimeZone } from "../src/races/race-dates";
 import type { AdminIdentity } from "../src/admin/identity";
 import { formFields } from "./admin-html";
+import { countingRowsRead } from "./d1-rows";
 
 // The two allowed test doubles: the admin identity and the clock. A request is
 // "signed in" as whatever email the x-test-admin header names; without it,
 // it's anonymous. The clock stands still at TODAY unless a test moves it (atClock).
+// Besides them, rowsReadByAdmin counts the rows the database reads: a meter on
+// the real database (test/d1-rows.ts), not a stand-in for it.
 const testIdentity: AdminIdentity = async (c) => c.req.header("x-test-admin") ?? null;
 const TEST_NOW = new Date("2025-11-01T10:00:00Z"); // 11:00 in Berlin
 /** The tests' today (2025-11-01) in the organizers' time zone: Races dated before it are in the past. */
@@ -29,15 +32,28 @@ export async function atClock<T>(instant: string, then: () => Promise<T>): Promi
 export const ORIGIN = "https://example.com";
 export const ADMIN = "orga@example.com";
 
-export async function request(path: string, init: RequestInit = {}) {
+export const request = (path: string, init: RequestInit = {}) => fetchWith(env, path, init);
+
+/** Sends a request to the app with `appEnv` as its bindings, and waits for any work it leaves running. */
+async function fetchWith(appEnv: typeof env, path: string, init: RequestInit) {
   const ctx = createExecutionContext();
-  const res = await app.fetch(new Request(`${ORIGIN}${path}`, { redirect: "manual", ...init }), env, ctx);
+  const res = await app.fetch(new Request(`${ORIGIN}${path}`, { redirect: "manual", ...init }), appEnv, ctx);
   await waitOnExecutionContext(ctx);
   return res;
 }
 
 export const asAdmin = (path: string, init: RequestInit = {}) =>
   request(path, { ...init, headers: { "x-test-admin": ADMIN, ...(init.headers ?? {}) } });
+
+/** How many database rows an Admin opening `path` reads, summed over every query of the request. */
+export async function rowsReadByAdmin(path: string): Promise<number> {
+  const counting = countingRowsRead(env.DB);
+  const res = await fetchWith({ ...env, DB: counting.db }, path, { headers: { "x-test-admin": ADMIN } });
+  expect(res.status).toBe(200);
+  // Read the page to its end, so that a query made while it is being sent counts too.
+  await res.arrayBuffer();
+  return counting.rowsRead();
+}
 
 /** Posts an admin form, signed in as the test Admin unless other headers are given. */
 function postForm(path: string, fields: Record<string, string>, headers: Record<string, string>) {

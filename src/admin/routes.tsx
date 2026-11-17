@@ -20,7 +20,7 @@ import {
   type StoredRegistration,
 } from "../registration/registrations";
 import { numbersLeft, setNextNumbers } from "../registration/next-numbers";
-import { nextAndReservedNumbers, removeReservedNumbers, reserveNumbers, type NextAndReserved } from "../registration/reserved-numbers";
+import { nextAndReservedNumbers, removeReservedNumbers, reserveNumbers } from "../registration/reserved-numbers";
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, problemPage, REGISTRATION_FIELD, registrationCount } from "./admin-page";
@@ -35,7 +35,7 @@ import {
   type NextNumbersSectionState,
   type ReservedSectionState,
 } from "./race-settings-page";
-import { RegistrationToggle } from "./registration-toggle";
+import { RegistrationToggle, type ToggleState } from "./registration-toggle";
 import {
   deleteRacePage,
   deleteRegistrationPage,
@@ -61,8 +61,8 @@ function NewRaceForm(props: { values?: RaceFormValues; errors?: RaceInputErrors 
   );
 }
 
-/** A Race on the start page, with its Next and Reserved numbers for the toggle's question. */
-type RaceCard = RaceListItem & { numbers: NextAndReserved };
+/** A Race on the start page, with what its toggle needs. */
+type RaceCard = RaceListItem & ToggleState;
 
 /** Each Race as a card: its Registrations, its public page, its QR code, and the open/closed toggle. */
 function RaceList(props: { races: RaceCard[]; requestUrl: string }) {
@@ -83,7 +83,7 @@ function RaceList(props: { races: RaceCard[]; requestUrl: string }) {
                 <QrButton label="QR-Code" race={race} class="btn btn-secondary btn-compact" />
               </div>
             </div>
-            <RegistrationToggle race={race} numbers={race.numbers} />
+            <RegistrationToggle race={race} />
             <small class="muted">angelegt von {race.createdBy}</small>
           </li>
         ))}
@@ -105,15 +105,24 @@ async function racesPage(c: Context<AppEnv>, form?: { values: RaceFormValues; er
   );
 }
 
-/** Every Race with its numbers; a Race deleted by another Admin in the meantime is left out. */
+/**
+ * Every Race with what its toggle needs. A closed Race deleted by another Admin
+ * while its numbers were being worked out is left out; an open one shows as listed.
+ */
 async function raceCards(db: D1Database): Promise<RaceCard[]> {
-  const cards = await Promise.all(
-    (await listRaces(db)).map(async (race) => {
-      const numbers = await nextAndReservedNumbers(db, race.id);
-      return numbers && { ...race, numbers };
-    }),
-  );
+  const cards = await Promise.all((await listRaces(db)).map((race) => withToggleState(db, race)));
   return cards.filter((card) => card !== null);
+}
+
+/**
+ * `race` with what its toggle needs: the Next and Reserved numbers are worked
+ * out only while Registration is closed (see ToggleState). Null when the Race
+ * was deleted in the meantime.
+ */
+async function withToggleState<R extends Race>(db: D1Database, race: R): Promise<(R & ToggleState) | null> {
+  if (race.registrationOpen) return { ...race, registrationOpen: true };
+  const numbers = await nextAndReservedNumbers(db, race.id);
+  return numbers && { ...race, registrationOpen: false, numbers };
 }
 
 const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
@@ -252,14 +261,14 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
 
   admin.get("/races/:token", (c) =>
     withRace(c, async (race) => {
-      const [registrations, left, numbers] = await Promise.all([
+      const [registrations, left, raceWithToggle] = await Promise.all([
         listRegistrations(c.env.DB, race.id),
         numbersLeft(c.env.DB, race.id),
-        nextAndReservedNumbers(c.env.DB, race.id),
+        withToggleState(c.env.DB, race),
       ]);
       // Deleted by another Admin in the meantime.
-      if (!left || !numbers) return problemPage(c, RACE_NOT_FOUND, 404);
-      return raceRegistrationsPage(c, race, registrations, left, numbers);
+      if (!left || !raceWithToggle) return problemPage(c, RACE_NOT_FOUND, 404);
+      return raceRegistrationsPage(c, raceWithToggle, registrations, left);
     }),
   );
 

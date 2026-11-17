@@ -11,13 +11,12 @@ import type { Race } from "../races/races";
 import { duplicatesOf } from "../registration/duplicates";
 import { divisionOfRegistration, type ParticipantInput } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
-import type { NextAndReserved } from "../registration/reserved-numbers";
 import { SEARCH_ATTRIBUTES, SEARCH_FIELD_ID, searchKeys } from "../shared/registration-search";
 import { divisionIconSvg } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
 import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, registrationCount, RegistrationField, SERIES_NAMES } from "./admin-page";
-import { RegistrationToggle } from "./registration-toggle";
+import { RegistrationToggle, type RaceWithToggle } from "./registration-toggle";
 
 const t = strings("de").flow;
 const qrStrings = strings("de").qr;
@@ -117,7 +116,7 @@ function NumbersLeftNotice(props: { race: Race; left: Record<SingleOrPair, numbe
   );
 }
 
-function RaceHeader(props: { race: Race; count: number; numbers: NextAndReserved }) {
+function RaceHeader(props: { race: RaceWithToggle; count: number }) {
   return (
     <>
       <p><a href="/admin">← Alle Läufe</a></p>
@@ -125,7 +124,7 @@ function RaceHeader(props: { race: Race; count: number; numbers: NextAndReserved
       <p class="muted">
         {formatRaceDateShort(props.race.date, "de")} · {registrationCount(props.count)}
       </p>
-      <RegistrationToggle race={props.race} numbers={props.numbers} from="race" />
+      <RegistrationToggle race={props.race} from="race" />
       <a href={exportPath(props.race)} class="btn btn-secondary" download>
         Excel für RaceResult herunterladen
       </a>
@@ -144,14 +143,13 @@ function RaceHeader(props: { race: Race; count: number; numbers: NextAndReserved
  * All Registrations of the Race, grouped by Duration and then Division (empty
  * groups left out), in number order within a group; possible duplicates are
  * flagged across all groups. Above them, a warning when a series has few
- * numbers `left`; the Race's Next and Reserved `numbers` go into the toggle's question.
+ * numbers `left`; at the top, the Race's toggle.
  */
 export function raceRegistrationsPage(
   c: Context<AppEnv>,
-  race: Race,
+  race: RaceWithToggle,
   registrations: StoredRegistration[],
   left: Record<SingleOrPair, number>,
-  numbers: NextAndReserved,
 ) {
   const duplicates = duplicatesOf(registrations);
   const groups = DURATION_ORDER.map((duration) => {
@@ -164,7 +162,7 @@ export function raceRegistrationsPage(
   }).filter((group) => group.count > 0);
   return c.html(
     <AdminPage url={c.req.url} title={race.name} admin={c.get("adminEmail")}>
-      <RaceHeader race={race} count={registrations.length} numbers={numbers} />
+      <RaceHeader race={race} count={registrations.length} />
       <NumbersLeftNotice race={race} left={left} />
       {registrations.length === 0 ? <p class="muted">Noch keine Anmeldungen.</p> : <RegistrationSearch />}
       {groups.map((group) => (

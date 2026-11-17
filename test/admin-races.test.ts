@@ -13,6 +13,7 @@ import {
   postReserve,
   publicLinks,
   request,
+  rowsReadByAdmin,
   setRegistration,
   setRegistrationOnRacePage,
   submit,
@@ -223,6 +224,21 @@ describe("opening and closing Registration", () => {
     expect(unknown.status).toBe(404);
     expect(badValue.status).toBe(400);
     expect(registrationToggle(raceCard(await (await asAdmin("/admin")).text(), "Stundenlauf"))?.state).toBe("✓ Geschlossen");
+  });
+});
+
+describe("database rows read on race day", () => {
+  // On the Workers Free plan, D1 allows 5 million rows read per day; Admins reload these pages all day long.
+  it("reloading the start page or the Race page of an open Race with 150 Registrations reads fewer than 2,000 rows each", async () => {
+    const link = await newRace("Nikolauslauf", "2026-12-09", { firstSingleNumber: 181, firstPairNumber: 1061 });
+    expect((await postReserve(link, "1-180")).status).toBe(303);
+    expect((await postReserve(link, "1001-1060")).status).toBe(303);
+    for (let i = 0; i < 150; i++) {
+      expect((await submit(link, i % 4 === 3 ? pairRegistration() : registration())).status).toBe(200);
+    }
+
+    expect(await rowsReadByAdmin(adminRacePath(link))).toBeLessThan(2000);
+    expect(await rowsReadByAdmin("/admin")).toBeLessThan(2000);
   });
 });
 
