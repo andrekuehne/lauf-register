@@ -42,6 +42,40 @@ describe("the Registrations of a Race", () => {
     expect([...rows.values()].join()).not.toContain("Emil");
   });
 
+  it("lists only the Race's own Registrations while Participants register for another Race at the same time, each with its own Participants and Previous numbers", async () => {
+    const race = await newRace("Stundenlauf", "2026-12-10");
+    const other = await newRace("Anderer Lauf", "2026-12-09");
+    const olga = { ...anna, title: "none", firstName: "Olga" };
+    const otto = { ...ben, firstName: "Otto" };
+    // Alternately, so each Race's Registrations get ids in between the other's.
+    await register(race, [anna]); // 1
+    await register(other, [olga]); // 1
+    await register(race, [ben, clara]); // 1001
+    await register(other, [otto, olga]); // 1001
+    await register(race, [emil]); // 2
+    await register(other, [otto]); // 2
+    expect((await postEdit(race, 2, editForm(7, 60, [emil]))).status).toBe(303);
+    expect((await postEdit(other, 1, editForm(5, 60, [olga]))).status).toBe(303);
+
+    const rows = await registrationRows(race);
+    const otherRows = await registrationRows(other);
+
+    expect([...rows.keys()].sort((a, b) => a - b)).toEqual([1, 7, 1001]);
+    expect(pageText(rows.get(1)!)).toContain("Dr. Anna Muster");
+    expect(pageText(rows.get(1)!)).not.toContain("vorher");
+    expect(pageText(rows.get(1001)!)).toMatch(/Ben Beispiel.*Clara Muster/);
+    expect(pageText(rows.get(7)!)).toContain("Emil Beispiel");
+    expect(pageText(rows.get(7)!)).toContain("vorher 2");
+    expect(pageText([...rows.values()].join())).not.toMatch(/Olga|Otto/);
+    expect([...otherRows.keys()].sort((a, b) => a - b)).toEqual([2, 5, 1001]);
+    expect(pageText(otherRows.get(5)!)).toContain("Olga Muster");
+    expect(pageText(otherRows.get(5)!)).toContain("vorher 1");
+    expect(pageText(otherRows.get(1001)!)).toMatch(/Otto Beispiel.*Olga Muster/);
+    expect(pageText(otherRows.get(2)!)).toContain("Otto Beispiel");
+    expect(pageText(otherRows.get(2)!)).not.toContain("vorher");
+    expect(pageText([...otherRows.values()].join())).not.toMatch(/Anna|Ben|Clara|Emil/);
+  });
+
   it("shows each Participant's stored Gender, and the Division that follows from it", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [ben]);

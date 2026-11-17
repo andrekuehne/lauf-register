@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { anna, ben, clara, emil, registration } from "./fixtures";
-import { adminRacePath, asAdmin, newRace, request, submit } from "./http";
+import { anna, ben, clara, editForm, emil, registration } from "./fixtures";
+import { adminRacePath, asAdmin, newRace, postEdit, request, submit } from "./http";
 import { readXlsx, type Cell } from "./xlsx";
 
 // Storage is shared by the tests in a file: start each test without Races.
@@ -70,6 +70,33 @@ describe("the RaceResult export", () => {
     expect(full(rows[2]!)).toEqual([1001, 2, "Beispiel", "Ben", null, 1990, "m", null, "Muster", "Clara", "Dr.", 2015, "w", "LG Nord"]);
     expect(full(rows[3]!)).toEqual([1002, 2, "Beispiel", "Emil", null, 2017, "m", null, "Beispiel", "Ben", null, 1990, "m", null]);
     expect(full(rows[4]!)).toEqual([1003, 1, "Muster", "Anna", "Dr.", 1985, "w", "LG Nord", "Beispiel", "Emil", null, 2017, "m", null]);
+  });
+
+  it("holds only the Race's own Registrations, each with its own Participants and current number, while Participants register for another Race at the same time", async () => {
+    const race = await newRace("Stundenlauf");
+    const other = await newRace("Anderer Lauf");
+    const olga = { ...anna, title: "none", firstName: "Olga" };
+    const otto = { ...ben, firstName: "Otto" };
+    // Alternately, so each Race's Registrations get ids in between the other's.
+    await register(race, [anna]); // 1
+    await register(other, [olga]); // 1
+    await register(race, [ben, clara]); // 1001
+    await register(other, [otto, olga]); // 1001
+    await register(race, [emil]); // 2
+    expect((await postEdit(race, 2, editForm(7, 60, [emil]))).status).toBe(303);
+
+    const { rows } = await download(race);
+    const { rows: otherRows } = await download(other);
+
+    expect(rows.slice(1).map(full)).toEqual([
+      full([1, 2, "Muster", "Anna", "Dr.", 1985, "w", "LG Nord"]),
+      full([7, 2, "Beispiel", "Emil", null, 2017, "m", null]),
+      [1001, 2, "Beispiel", "Ben", null, 1990, "m", null, "Muster", "Clara", null, 2015, "w", "LG Nord"],
+    ]);
+    expect(otherRows.slice(1).map(full)).toEqual([
+      full([1, 2, "Muster", "Olga", null, 1985, "w", "LG Nord"]),
+      [1001, 2, "Beispiel", "Otto", null, 1990, "m", null, "Muster", "Olga", null, 1985, "w", "LG Nord"],
+    ]);
   });
 
   it("codes Wettbewerb 1 for the Halbstundenlauf and 2 for the Stundenlauf", async () => {

@@ -49,13 +49,16 @@ export async function submitRegistration(db: D1Database, raceId: number, input: 
   }
 }
 
-type RegistrationRow = {
+/** A Registration's own columns. */
+type RegistrationColumns = {
   id: number;
   number: number;
   duration: Duration;
   created_at: string;
-  /** "id:number" pairs, comma-separated, in no particular order; null when none. */
-  previous_numbers: string | null;
+};
+
+/** A Participant's columns. */
+type ParticipantColumns = {
   gender: ParticipantInput["gender"];
   title: ParticipantInput["title"];
   first_name: string;
@@ -64,20 +67,47 @@ type RegistrationRow = {
   club: string | null;
 };
 
+type RegistrationRow = RegistrationColumns &
+  ParticipantColumns & {
+    /** "id:number" pairs, comma-separated, in no particular order; null when none. */
+    previous_numbers: string | null;
+  };
+
+/** A Previous number as stored: the higher its id, the later it was recorded. */
+type PreviousNumber = { id: number; number: number };
+
+const participantOf = (row: ParticipantColumns): ParticipantInput => ({
+  gender: row.gender,
+  title: row.title,
+  firstName: row.first_name,
+  lastName: row.last_name,
+  birthYear: row.birth_year,
+  club: row.club,
+});
+
+/** A Registration from its columns, its Previous numbers (in any order: listed oldest first) and its Participants. */
+const registrationOf = (row: RegistrationColumns, previous: PreviousNumber[], participants: ParticipantInput[]): StoredRegistration => ({
+  id: row.id,
+  number: row.number,
+  duration: row.duration,
+  createdAt: row.created_at,
+  previousNumbers: [...previous].sort((a, b) => a.id - b.id).map((p) => p.number),
+  participants,
+});
+
 const REGISTRATIONS_WITH_PARTICIPANTS = `
   SELECT r.id, r.number, r.duration, r.created_at,
     (SELECT group_concat(id || ':' || number) FROM previous_numbers WHERE registration_id = r.id) AS previous_numbers,
     p.gender, p.title, p.first_name, p.last_name, p.birth_year, p.club
   FROM registrations r JOIN participants p ON p.registration_id = r.id`;
 
-/** Previous numbers from their "id:number" pairs, oldest (lowest id) first. */
-function oldestFirst(pairs: string | null): number[] {
+/** Previous numbers from their "id:number" pairs. */
+function previousNumbersIn(pairs: string | null): PreviousNumber[] {
   if (!pairs) return [];
-  return pairs
-    .split(",")
-    .map((pair) => pair.split(":").map(Number) as [number, number])
-    .sort(([a], [b]) => a - b)
-    .map(([, number]) => number);
+  return pairs.split(",").map((pair) => {
+    const [id, number] = pair.split(":").map(Number) as [number, number];
+    return { id, number };
+  });
 }
 
 /** One Registration per number, Participants in slot order (rows must come sorted by Registration, then slot). */
@@ -86,35 +116,66 @@ function groupRows(rows: RegistrationRow[]): StoredRegistration[] {
   for (const row of rows) {
     let current = registrations[registrations.length - 1];
     if (!current || current.id !== row.id) {
-      current = {
-        id: row.id,
-        number: row.number,
-        duration: row.duration,
-        createdAt: row.created_at,
-        previousNumbers: oldestFirst(row.previous_numbers),
-        participants: [],
-      };
+      current = registrationOf(row, previousNumbersIn(row.previous_numbers), []);
       registrations.push(current);
     }
-    current.participants.push({
-      gender: row.gender,
-      title: row.title,
-      firstName: row.first_name,
-      lastName: row.last_name,
-      birthYear: row.birth_year,
-      club: row.club,
-    });
+    current.participants.push(participantOf(row));
   }
   return registrations;
 }
 
-/** All Registrations of a Race, in Registration-number order. */
+/**
+ * All Registrations of a Race, in Registration-number order. The Race page is
+ * reloaded all day, so this reads as few database rows as it can (on the
+ * Workers Free plan, D1 allows only so many per day): the Registrations, then
+ * their Participants as one stretch of Registration ids rather than one lookup
+ * per Registration, then their Previous numbers. One batch, so all three see
+ * the same state. Another Race's Registrations can have ids in between: their
+ * Participants are read, then left out.
+ */
 export async function listRegistrations(db: D1Database, raceId: number): Promise<StoredRegistration[]> {
-  const { results } = await db
-    .prepare(`${REGISTRATIONS_WITH_PARTICIPANTS} WHERE r.race_id = ? ORDER BY r.number, p.slot`)
-    .bind(raceId)
-    .all<RegistrationRow>();
-  return groupRows(results);
+  const [registrations, participants, previousNumbers] = (await db.batch([
+    db.prepare("SELECT id, number, duration, created_at FROM registrations WHERE race_id = ? ORDER BY number").bind(raceId),
+    // The lowest and highest id as two lookups, each reading one row of the index
+    // registrations_by_race_and_id; asked for in one SELECT, SQLite reads the
+    // index rows of every Registration of the Race.
+    db
+      .prepare(
+        `SELECT registration_id, gender, title, first_name, last_name, birth_year, club FROM participants
+         WHERE registration_id BETWEEN (SELECT MIN(id) FROM registrations WHERE race_id = ?1)
+           AND (SELECT MAX(id) FROM registrations WHERE race_id = ?1)
+         ORDER BY registration_id, slot`,
+      )
+      .bind(raceId),
+    // Previous numbers are few: go through them and look up each one's
+    // Registration (CROSS JOIN keeps that order), rather than go through every
+    // Registration of the Race.
+    db
+      .prepare(
+        `SELECT p.registration_id, p.id, p.number FROM previous_numbers p CROSS JOIN registrations r ON r.id = p.registration_id
+         WHERE r.race_id = ?`,
+      )
+      .bind(raceId),
+    // D1 types a batch's results with one row type; these three each have their own.
+  ])) as [D1Result<RegistrationColumns>, D1Result<ParticipantColumns & WithRegistrationId>, D1Result<PreviousNumber & WithRegistrationId>];
+  const participantsByRegistration = byRegistration(participants.results, participantOf);
+  const previousByRegistration = byRegistration(previousNumbers.results, (row) => ({ id: row.id, number: row.number }));
+  return registrations.results.map((row) =>
+    registrationOf(row, previousByRegistration.get(row.id) ?? [], participantsByRegistration.get(row.id) ?? []),
+  );
+}
+
+type WithRegistrationId = { registration_id: number };
+
+/** Each row's value, grouped by the Registration the row belongs to, in row order. */
+function byRegistration<Row extends WithRegistrationId, Value>(rows: Row[], value: (row: Row) => Value): Map<number, Value[]> {
+  const grouped = new Map<number, Value[]>();
+  for (const row of rows) {
+    const values = grouped.get(row.registration_id) ?? [];
+    values.push(value(row));
+    grouped.set(row.registration_id, values);
+  }
+  return grouped;
 }
 
 export async function countRegistrations(db: D1Database, raceId: number): Promise<number> {
