@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { anna, ben, clara, emil, registration } from "./fixtures";
-import { adminRacePath, asAdmin, deletePath, newRace, postDelete, request, submit } from "./http";
+import { anna, ben, clara, editForm, emil, registration } from "./fixtures";
+import { adminRacePath, asAdmin, deleteFormRegistration, deletePath, newRace, postDelete, postEdit, request, submit } from "./http";
 
 // Storage is shared by the tests in a file: start each test without Races.
 beforeEach(async () => {
@@ -181,13 +181,31 @@ describe("deleting a Registration", () => {
     expect(await register(race, [ben])).toBe(2);
   });
 
+  it("deletes nobody when another Registration got the number since the confirmation was opened", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+    await register(race, [ben]);
+    const bensConfirmation = await deleteFormRegistration(race, 2);
+    // Meanwhile another Admin moves Ben to 50 and Anna to 2.
+    expect((await postEdit(race, 2, editForm(50, 60, [ben]))).status).toBe(303);
+    expect((await postEdit(race, 1, editForm(2, 60, [anna]))).status).toBe(303);
+
+    const res = await postDelete(race, 2, { registration: bensConfirmation });
+
+    expect(res.status).toBe(409);
+    expect(await res.text()).toContain("Diese Startnummer hat inzwischen eine andere Anmeldung.");
+    const rows = await registrationRows(race);
+    expect(rows.get(2)).toContain("Anna");
+    expect(rows.get(50)).toContain("Ben");
+  });
+
   it("is only for signed-in Admins, and answers 404 for an unknown Registration", async () => {
     const race = await newRace("Stundenlauf");
     const other = await newRace("Anderer Lauf");
     await register(race, [anna]);
     await register(other, [ben, clara]);
 
-    const anonymous = await postDelete(race, 1, {});
+    const anonymous = await postDelete(race, 1, { headers: {} });
     const unknown = await postDelete(race, 7);
     const fromOtherRace = await postDelete(race, 1001);
     const unknownConfirm = await asAdmin(deletePath(race, 7));

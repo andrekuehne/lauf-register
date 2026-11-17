@@ -14,6 +14,12 @@ export function raceCard(html: string, name: string): string {
   return [...html.matchAll(/<li class="card[^"]*">[\s\S]*?<\/li>/g)].map((m) => m[0]).find((card) => textOf(card).startsWith(name)) ?? "";
 }
 
+/** The text of the Registration with this number in a Race's list, or "" when there is none. */
+export function registrationCardText(html: string, number: number): string {
+  const card = html.match(new RegExp(`<li class="card reg[^"]*" data-registration="${number}">[\\s\\S]*?</li>`))?.[0];
+  return card ? textOf(card) : "";
+}
+
 /** The links of a piece of a page: their text and where they go. */
 export function links(html: string): { text: string; href: string }[] {
   return [...html.matchAll(/<a([^>]*)>([\s\S]*?)<\/a>/g)].map((m) => ({ text: textOf(m[2]!), href: attr(m[1]!, "href") ?? "" }));

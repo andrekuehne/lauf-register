@@ -127,6 +127,7 @@ color:var(--muted);background:var(--card);border:2px solid var(--line);cursor:po
 .reg-cat .ico{width:30px;height:30px;margin-right:8px}
 .reg-cat .ico svg{width:20px;height:20px}
 .reg-time{font-size:.9rem}
+.reg-prev{margin:-4px 0 6px;font-size:.9rem}
 .reg-person{margin:4px 0 0}
 .dup{margin:4px 0 0;padding:4px 8px;background:var(--warn-bg);border-left:4px solid var(--warn-line);color:var(--warn-fg);font-size:.9rem;font-weight:600;border-radius:4px}
 .reg-actions{margin:8px 0 0;font-size:.95rem}

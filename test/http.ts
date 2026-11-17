@@ -44,9 +44,21 @@ export const posterPath = (raceLink: string) => `${adminRacePath(raceLink)}/post
 /** The admin page of a Registration's delete confirmation; posting to it deletes. */
 export const deletePath = (raceLink: string, number: number) => `${adminRacePath(raceLink)}/registrations/${number}/delete`;
 
-export function postDelete(raceLink: string, number: number, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
-  return postForm(deletePath(raceLink, number), {}, headers);
+/**
+ * Confirms the delete as the browser does: with the hidden field naming the
+ * Registration, read from the confirmation page as it is now unless given.
+ */
+export async function postDelete(
+  raceLink: string,
+  number: number,
+  { headers = { "x-test-admin": ADMIN }, registration }: { headers?: Record<string, string>; registration?: string } = {},
+) {
+  const named = registration ?? (await deleteFormRegistration(raceLink, number));
+  return postForm(deletePath(raceLink, number), named === undefined ? {} : { registration: named }, headers);
 }
+
+/** The hidden field naming the Registration on its delete confirmation, as an Admin opens it now (none when it doesn't open). */
+export const deleteFormRegistration = (raceLink: string, number: number) => registrationNamedOn(deletePath(raceLink, number));
 
 /** The admin form for editing a Registration; posting to it saves. */
 export const editPath = (raceLink: string, number: number) => `${adminRacePath(raceLink)}/registrations/${number}/edit`;
@@ -61,8 +73,11 @@ export async function postEdit(raceLink: string, number: number, fields: Record<
 }
 
 /** The hidden field naming the Registration in its edit form, as an Admin opens it now (none when it doesn't open). */
-export async function editFormRegistration(raceLink: string, number: number): Promise<string | undefined> {
-  const res = await asAdmin(editPath(raceLink, number));
+export const editFormRegistration = (raceLink: string, number: number) => registrationNamedOn(editPath(raceLink, number));
+
+/** The hidden field naming a Registration on an admin page (an edit form, a delete confirmation). */
+async function registrationNamedOn(path: string): Promise<string | undefined> {
+  const res = await asAdmin(path);
   return (await res.text()).match(/name="registration" value="(\d+)"/)?.[1];
 }
 
@@ -73,7 +88,20 @@ export function postSettings(raceLink: string, fields: Record<string, string>, h
   return postForm(settingsPath(raceLink), fields, headers);
 }
 
-/** Reserving numbers from the Race settings page: a number or range as typed, and the taken numbers the Admin confirmed, if any. */
+/**
+ * The confirmation the Admin is asked for before reserving numbers that
+ * Registrations have, as its form sends it back; none when the page asks nothing.
+ */
+export const confirmationOn = (html: string) => html.match(/name="confirmed" value="([^"]*)"/)?.[1];
+
+/** Reserves the numbers, confirming the question about taken numbers, if any, as the Admin sees it now. */
+export async function reserveConfirmed(raceLink: string, numbers: string): Promise<Response> {
+  const asked = await postReserve(raceLink, numbers);
+  const confirmation = asked.status === 200 ? confirmationOn(await asked.clone().text()) : undefined;
+  return confirmation === undefined ? asked : postReserve(raceLink, numbers, confirmation);
+}
+
+/** Reserving numbers from the Race settings page: a number or range as typed, and the confirmation the Admin gave, if any. */
 export function postReserve(raceLink: string, numbers: string, confirmed?: string, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
   const fields: Record<string, string> = { numbers };
   if (confirmed !== undefined) fields.confirmed = confirmed;

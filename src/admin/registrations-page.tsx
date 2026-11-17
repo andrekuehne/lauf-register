@@ -58,6 +58,8 @@ function RegistrationCard(props: {
         </span>
         <span class="muted reg-time">{formatRegistrationTime(registration.createdAt, race.date)}</span>
       </div>
+      {/* The confirmation screen may still show an old number: the desk finds it here. */}
+      {registration.previousNumbers.length > 0 && <p class="muted reg-prev">vorher {registration.previousNumbers.join(", ")}</p>}
       {registration.participants.map((p, slot) => {
         const others = props.duplicates?.(registration, slot) ?? [];
         return (
@@ -182,6 +184,8 @@ export function deleteRegistrationPage(c: Context<AppEnv>, race: Race, registrat
       </ul>
       <p>Die Anmeldung und alle Angaben dazu werden gelöscht. Die Startnummer {registration.number} wird nicht neu vergeben.</p>
       <form method="post" action={deletePath(race, registration)}>
+        {/* Which Registration this is, should another one get its number before confirming. */}
+        <input type="hidden" name="registration" value={String(registration.id)} />
         <button type="submit" class="btn btn-danger">Endgültig löschen</button>
       </form>
       <p class="cancel"><a href={racePath(race)}>Abbrechen</a></p>

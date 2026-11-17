@@ -92,6 +92,11 @@ export function numberTakenError(number: number, other: StoredRegistration | nul
   return { number: `Startnummer ${number} ist schon an ${other ? participantNames(other) : "eine andere Anmeldung"} vergeben.` };
 }
 
+/** The message on the number field when storing found the number Reserved. */
+export const numberReservedError = (number: number): EditErrors => ({
+  number: `Startnummer ${number} ist gesperrt. Zum Vergeben bitte erst in den Einstellungen entsperren.`,
+});
+
 /** The German message for one validation issue, keyed by the form field it belongs to. */
 function germanError(issue: RegistrationIssue, values: EditValues, year: number): EditErrors {
   if (issue.path === "duration") return { duration: PLEASE_CHOOSE };

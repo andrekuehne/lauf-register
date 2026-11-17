@@ -148,15 +148,20 @@ describe("editing a Registration", () => {
     expect(rows.get(50)![3]).toBe("Ben");
   });
 
-  it("allows a Reserved number, on purpose", async () => {
+  it("refuses a Reserved number and changes nothing: it is kept away from Participants", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna]);
     expect((await postReserve(race, "13")).status).toBe(303);
 
-    const res = await postEdit(race, 1, form(13, 60, [anna]));
+    const res = await postEdit(race, 1, form(13, 60, [{ ...anna, firstName: "Annette" }]));
 
-    expect(res.status).toBe(303);
-    expect([...(await stored(race)).keys()]).toEqual([13]);
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain("Startnummer 13 ist gesperrt. Zum Vergeben bitte erst in den Einstellungen entsperren.");
+    expect(html).toContain('value="Annette"');
+    const rows = await stored(race);
+    expect([...rows.keys()]).toEqual([1]);
+    expect(rows.get(1)![3]).toBe("Anna");
   });
 
   it("refuses a second Participant for a single and changes nothing", async () => {

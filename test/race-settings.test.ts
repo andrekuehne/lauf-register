@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { anna, ben, pairRegistration as pair, registration as single } from "./fixtures";
-import { pageText, reservedRangesOnPage } from "./admin-html";
-import { adminRacePath, asAdmin, editPath, newRace, numberOf, postReserve, postSettings, postUnreserve, request, settingsPath, submit } from "./http";
+import { anna, ben, editForm, pairRegistration as pair, registration as single } from "./fixtures";
+import { pageText, registrationCardText, reservedRangesOnPage } from "./admin-html";
+import { readXlsx } from "./xlsx";
+import { adminRacePath, asAdmin, confirmationOn, editPath, newRace, numberOf, postEdit, postReserve, postSettings, postUnreserve, request, reserveConfirmed, settingsPath, submit } from "./http";
 
 beforeEach(async () => {
   await env.DB.exec("DELETE FROM races");
@@ -162,12 +163,11 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
     expect(asked.status).toBe(200);
     const question = await asked.text();
     expect(pageText(question)).toContain("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.");
-    expect(question).toContain('name="confirmed" value="1"');
     // Nothing happens before the Admin confirms.
     expect(reservedRangesOnPage(question)).toEqual([]);
     expect(await firstNameOn(race, 1)).toBe("Erika");
 
-    const confirmed = await postReserve(race, "1", "1");
+    const confirmed = await postReserve(race, "1", confirmationOn(question));
 
     expect(confirmed.status).toBe(200);
     const result = await confirmed.text();
@@ -185,40 +185,71 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
     await submit(race, single({ participants: [ben] })); // 2
     await submit(race, pair()); // 1001: Dr. Anna Muster and Ben Beispiel
 
-    const question = pageText(await (await postReserve(race, "1-2")).text());
-    expect(question).toContain("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.");
-    expect(question).toContain("Startnummer 2 ist an Ben Beispiel vergeben. Er bekommt eine neue Startnummer.");
-    const singles = pageText(await (await postReserve(race, "1-2", "1,2")).text());
+    const question = await (await postReserve(race, "1-2")).text();
+    expect(pageText(question)).toContain("Startnummer 1 ist an Erika Muster vergeben. Sie bekommt eine neue Startnummer.");
+    expect(pageText(question)).toContain("Startnummer 2 ist an Ben Beispiel vergeben. Er bekommt eine neue Startnummer.");
+    const singles = pageText(await (await postReserve(race, "1-2", confirmationOn(question))).text());
     expect(singles).toContain("1 → 3 (Erika Muster)");
     expect(singles).toContain("2 → 4 (Ben Beispiel)");
 
-    const pairQuestion = pageText(await (await postReserve(race, "1001")).text());
-    expect(pairQuestion).toContain("Startnummer 1001 ist an Dr. Anna Muster und Ben Beispiel vergeben. Sie bekommen eine neue Startnummer.");
-    const pairs = pageText(await (await postReserve(race, "1001", "1001")).text());
+    const pairQuestion = await (await postReserve(race, "1001")).text();
+    expect(pageText(pairQuestion)).toContain("Startnummer 1001 ist an Dr. Anna Muster und Ben Beispiel vergeben. Sie bekommen eine neue Startnummer.");
+    const pairs = pageText(await (await postReserve(race, "1001", confirmationOn(pairQuestion))).text());
     expect(pairs).toContain("1001 → 1002 (Dr. Anna Muster und Ben Beispiel)");
     expect(await firstNameOn(race, 1002)).toBe("Anna");
+  });
+
+  it("moves everyone off the whole range, also where the count has not got to yet", async () => {
+    const race = await newRace("Stundenlauf");
+    await submit(race, single({ participants: [erika] })); // 1
+    await submit(race, single({ participants: [ben] })); // 2
+    await postEdit(race, 2, editForm(6, 60, [ben])); // the count has only got to 2
+
+    const result = pageText(await (await reserveConfirmed(race, "3-8")).text());
+
+    expect(result).toContain("6 → 9 (Ben Beispiel)");
+    expect(await firstNameOn(race, 9)).toBe("Ben");
   });
 
   it("asks again when other numbers of the range were taken since the Admin was asked", async () => {
     const race = await newRace("Stundenlauf");
     await submit(race, single({ participants: [erika] })); // 1
+    const askedAboutErika = confirmationOn(await (await postReserve(race, "1-5")).text());
     await submit(race, single()); // 2, registered while the Admin was being asked about 1 only
 
-    const res = await postReserve(race, "1-5", "1");
+    const res = await postReserve(race, "1-5", askedAboutErika);
 
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(pageText(html)).toContain("Startnummer 2 ist an Dr. Anna Muster vergeben. Sie bekommt eine neue Startnummer.");
-    expect(html).toContain('name="confirmed" value="1,2"');
     expect(reservedRangesOnPage(html)).toEqual([]);
     expect(await firstNameOn(race, 1)).toBe("Erika");
+    expect(await firstNameOn(race, 2)).toBe("Anna");
+  });
+
+  it("asks again, naming who is there now, when another Registration got the number since the Admin was asked", async () => {
+    const race = await newRace("Stundenlauf");
+    await submit(race, single({ participants: [erika] })); // 1
+    await submit(race, single({ participants: [ben] })); // 2
+    const askedAboutErika = confirmationOn(await (await postReserve(race, "1")).text());
+    // Meanwhile another Admin moves Erika to 50 and Ben to 1.
+    expect((await postEdit(race, 1, editForm(50, 60, [erika]))).status).toBe(303);
+    expect((await postEdit(race, 2, editForm(1, 60, [ben]))).status).toBe(303);
+
+    const res = await postReserve(race, "1", askedAboutErika);
+
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(pageText(html)).toContain("Startnummer 1 ist an Ben Beispiel vergeben. Er bekommt eine neue Startnummer.");
+    expect(reservedRangesOnPage(html)).toEqual([]);
+    expect(await firstNameOn(race, 1)).toBe("Ben");
   });
 
   it("reserves nothing when that Registration's series has no number left", async () => {
     const race = await newRace("Stundenlauf", "2026-12-09", { firstSingleNumber: 999 });
     await submit(race, single({ participants: [erika] })); // 999
 
-    const res = await postReserve(race, "999", "999");
+    const res = await reserveConfirmed(race, "999");
 
     expect(res.status).toBe(400);
     const html = await res.text();
@@ -230,13 +261,47 @@ describe("Reserving a number a Registration already has (the lost bib)", () => {
   it("removing the Reserved number later gives nobody their old number back", async () => {
     const race = await newRace("Stundenlauf");
     await submit(race, single({ participants: [erika] })); // 1
-    await postReserve(race, "1", "1"); // Erika → 2
+    await reserveConfirmed(race, "1"); // Erika → 2
 
     await postUnreserve(race, 1, 1);
 
     expect(await firstNameOn(race, 2)).toBe("Erika");
     expect(await firstNameOn(race, 1)).toBeNull();
     expect(await numberOf(await submit(race, single()))).toBe(3);
+  });
+});
+
+describe("Previous numbers", () => {
+  const erika = { ...anna, title: "none", firstName: "Erika" };
+  const card = async (raceLink: string, number: number) => registrationCardText(await (await asAdmin(adminRacePath(raceLink))).text(), number);
+
+  it("shows on a Registration's card every number it had before, oldest first, never its current one", async () => {
+    const race = await newRace("Stundenlauf");
+    await submit(race, single({ participants: [erika] })); // 1
+    expect(await card(race, 1)).not.toContain("vorher");
+
+    await reserveConfirmed(race, "1"); // Erika → 2
+    expect(await card(race, 2)).toContain("vorher 1");
+    await postEdit(race, 2, editForm(57, 60, [erika]));
+    expect(await card(race, 57)).toContain("vorher 1, 2");
+
+    await postEdit(race, 57, editForm(2, 60, [erika]));
+
+    const back = await card(race, 2);
+    expect(back).toContain("vorher 1, 57");
+    expect(back).not.toContain("vorher 1, 2");
+  });
+
+  it("are not in the RaceResult export", async () => {
+    const race = await newRace("Stundenlauf");
+    await submit(race, single({ participants: [erika] })); // 1
+    await postEdit(race, 1, editForm(57, 60, [erika]));
+
+    const res = await asAdmin(`${adminRacePath(race)}/export.xlsx`);
+    const { rows } = readXlsx(new Uint8Array(await res.arrayBuffer()));
+
+    expect(rows.flat()).not.toContain(1);
+    expect(rows[1]![0]).toBe(57);
   });
 });
 

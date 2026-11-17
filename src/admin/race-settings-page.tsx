@@ -81,8 +81,9 @@ function takenLine(registration: StoredRegistration): string {
 /** „23 → 57 (Erika Muster)“ */
 const moveLine = (move: Move) => `${move.registration.number} → ${move.to} (${participantNames(move.registration)})`;
 
-/** The taken numbers the Admin confirms, as the confirmation form sends them back. */
-export const confirmedNumbers = (taken: StoredRegistration[]) => taken.map((r) => r.number).join(",");
+/** The Registrations the Admin confirmed, by id, as the confirmation form sends them back (none: nobody was on the range). */
+export const confirmedRegistrations = (posted: unknown): number[] =>
+  typeof posted === "string" && /^\d+(,\d+)*$/.test(posted) ? posted.split(",").map(Number) : [];
 
 export const reservedPath = (race: Race) => `${racePath(race)}/reserved`;
 /** The settings page opened at the Reserved numbers section (the page is long on a phone). */
@@ -110,7 +111,7 @@ function ReservedSection(props: { race: Race; state: ReservedSectionState }) {
           {state.toConfirm.map((registration) => <p>{takenLine(registration)}</p>)}
           <form method="post" action={`${reservedPath(race)}#reserved`}>
             <input type="hidden" name="numbers" value={state.typed ?? ""} />
-            <input type="hidden" name="confirmed" value={confirmedNumbers(state.toConfirm)} />
+            <input type="hidden" name="confirmed" value={state.toConfirm.map((registration) => registration.id).join(",")} />
             <button type="submit" class="btn">Sperren und neue Startnummer vergeben</button>
           </form>
           <p class="cancel"><a href={reservedSectionPath(race)}>Abbrechen</a></p>

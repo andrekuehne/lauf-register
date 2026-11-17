@@ -101,15 +101,19 @@ describe("Registration numbers", () => {
   });
 });
 
-/** Stores bare Registrations with the given numbers in the Race behind a public link. */
+/** Stores Registrations of one Participant with the given numbers in the Race behind a public link, past the count. */
 async function takeNumbers(raceLink: string, numbers: number[]) {
   const token = raceLink.slice("/r/".length);
   for (const number of numbers) {
-    await env.DB.prepare(
-      `INSERT INTO registrations (race_id, number, duration, attempt_id)
-       SELECT id, ?, 60, ? FROM races WHERE token = ?`,
-    )
-      .bind(number, `taken-${number}`, token)
-      .run();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO registrations (race_id, number, duration, attempt_id)
+         SELECT id, ?, 60, ? FROM races WHERE token = ?`,
+      ).bind(number, `taken-${number}`, token),
+      env.DB.prepare(
+        `INSERT INTO participants (registration_id, slot, gender, title, first_name, last_name, birth_year)
+         SELECT id, 1, 'F', 'none', 'Erika', 'Muster', 1985 FROM registrations WHERE attempt_id = ?`,
+      ).bind(`taken-${number}`),
+    ]);
   }
 }

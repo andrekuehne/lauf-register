@@ -112,6 +112,8 @@ test("reserving a lost bib: the Admin confirms, and the Registration gets a new 
   await expect(page.getByRole("button", { name: "1 entsperren" })).toBeVisible();
   const moved = await adminRegistration(page, link, "2");
   await expect(moved).toContainText("Erika Muster");
+  // Her confirmation screen still shows 1: the desk finds her by it.
+  await expect(moved).toContainText("vorher 1");
   await expect(page.locator('li[data-registration="1"]')).toHaveCount(0);
 });
 

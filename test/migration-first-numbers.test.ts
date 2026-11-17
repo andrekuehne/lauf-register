@@ -11,7 +11,7 @@ const FIRST_NUMBERS_MIGRATION = "0006_first_numbers.sql";
 it("keeps the next single and Pair numbers of a Race stored before the migration", async () => {
   // Back to the schema just before the migration (this file's storage is its own).
   await env.DB.exec(
-    "DROP TABLE reserved_numbers; DROP TABLE participants; DROP TABLE registrations; DROP TABLE races; DROP TABLE d1_migrations;",
+    "DROP TABLE previous_numbers; DROP TABLE reserved_numbers; DROP TABLE participants; DROP TABLE registrations; DROP TABLE races; DROP TABLE d1_migrations;",
   );
   const index = env.TEST_MIGRATIONS.findIndex((m) => m.name === FIRST_NUMBERS_MIGRATION);
   expect(index).toBeGreaterThan(0);

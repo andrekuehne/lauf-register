@@ -14,7 +14,6 @@ import {
   deleteRegistration,
   findRegistration,
   listRegistrations,
-  listRegistrationsWithin,
   updateRegistration,
   type StoredRegistration,
 } from "../registration/registrations";
@@ -22,10 +21,10 @@ import { listReservedNumbers, removeReservedNumbers, reserveNumbers } from "../r
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
-import { checkEdit, editRegistrationPage, numberTakenError, postedValues, storedValues } from "./edit-page";
+import { checkEdit, editRegistrationPage, numberReservedError, numberTakenError, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
-import { confirmedNumbers, RaceFields, raceSettingsPage, reservedSectionPath, type ReservedSectionState } from "./race-settings-page";
+import { confirmedRegistrations, RaceFields, raceSettingsPage, reservedSectionPath, type ReservedSectionState } from "./race-settings-page";
 import { RegistrationToggle } from "./registration-toggle";
 import { deleteRacePage, deleteRegistrationPage, racePath, raceRegistrationsPage, settingsPath } from "./registrations-page";
 
@@ -105,6 +104,12 @@ function withRegistration(c: Context<AppEnv>, then: (race: Race, registration: S
     return registration ? then(race, registration) : problemPage(c, REGISTRATION_NOT_FOUND, 404);
   });
 }
+
+/**
+ * Whether a posted edit form or delete confirmation was opened for this
+ * Registration: false when another Registration has got its number since.
+ */
+const isFormFor = (form: Record<string, unknown>, registration: StoredRegistration) => form.registration === String(registration.id);
 
 /**
  * The Race settings page with its Reserved numbers as stored; `reserved` adds
@@ -192,10 +197,9 @@ export function adminRoutes(identity: AdminIdentity) {
       const typed = typeof numbers === "string" ? numbers : "";
       const parsed = parseReservedRange(typed);
       if (!parsed.ok) return settingsPage(c, race, { typed, error: parsed.error });
-      const taken = await listRegistrationsWithin(c.env.DB, race.id, parsed);
-      // Ask first, and again when the taken numbers changed since the Admin was asked.
-      if (taken.length > 0 && confirmed !== confirmedNumbers(taken)) return settingsPage(c, race, { typed, toConfirm: taken });
-      const result = await reserveNumbers(c.env.DB, race.id, parsed);
+      // Asks first, and again when the Registrations on the range changed since the Admin was asked.
+      const result = await reserveNumbers(c.env.DB, race.id, parsed, confirmedRegistrations(confirmed));
+      if ("toConfirm" in result) return settingsPage(c, race, { typed, toConfirm: result.toConfirm });
       if ("noNumberLeft" in result) return settingsPage(c, race, { typed, error: NO_NUMBER_LEFT });
       if (result.moves.length === 0) return c.redirect(reservedSectionPath(race), 303);
       // Shown right away rather than after a redirect: the desk needs these lines to hand out the new bibs.
@@ -251,7 +255,7 @@ export function adminRoutes(identity: AdminIdentity) {
   admin.post("/races/:token/registrations/:number/edit", (c) =>
     withRegistration(c, async (race, registration) => {
       const form = await c.req.parseBody();
-      if (form.registration !== String(registration.id)) return problemPage(c, REGISTRATION_RENUMBERED, 409);
+      if (!isFormFor(form, registration)) return problemPage(c, REGISTRATION_RENUMBERED, 409);
       const values = postedValues(form);
       const checked = checkEdit(values, registration, raceYear(race));
       if (!checked.ok) return editRegistrationPage(c, race, registration, values, checked.errors);
@@ -262,6 +266,7 @@ export function adminRoutes(identity: AdminIdentity) {
         const other = await findRegistration(c.env.DB, race.id, checked.number);
         return editRegistrationPage(c, race, registration, values, numberTakenError(checked.number, other));
       }
+      if (result === "number reserved") return editRegistrationPage(c, race, registration, values, numberReservedError(checked.number));
       return c.redirect(racePath(race), 303);
     }),
   );
@@ -271,10 +276,10 @@ export function adminRoutes(identity: AdminIdentity) {
   );
 
   admin.post("/races/:token/registrations/:number/delete", (c) =>
-    withRace(c, async (race) => {
-      const number = registrationNumber(c.req.param("number"));
-      const deleted = number !== null && (await deleteRegistration(c.env.DB, race.id, number));
-      if (!deleted) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
+    withRegistration(c, async (race, registration) => {
+      if (!isFormFor(await c.req.parseBody(), registration)) return problemPage(c, REGISTRATION_RENUMBERED, 409);
+      // Deleted by another Admin in the meantime: say so.
+      if (!(await deleteRegistration(c.env.DB, race.id, registration.id))) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
       return c.redirect(racePath(race), 303);
     }),
   );
