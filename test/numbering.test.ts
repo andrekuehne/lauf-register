@@ -66,6 +66,18 @@ describe("Registration numbers", () => {
     expect(numbers).toEqual([...Array.from({ length: 39 }, (_, i) => 11 + i), 51, 52]);
   });
 
+  it("skip only the Race's own Previous numbers: another Race's don't hold up its count", async () => {
+    const other = await newRace("Silvesterlauf", "2026-12-31");
+    for (let i = 0; i < 3; i++) await submit(other, single()); // 1–3
+    expect((await postEdit(other, 2, editForm(50, 60, [anna]))).status).toBe(303); // 2 is a Previous number there
+    const race = await newRace("Stundenlauf");
+
+    const numbers = [];
+    for (let i = 0; i < 3; i++) numbers.push(await numberOf(await submit(race, single())));
+
+    expect(numbers).toEqual([1, 2, 3]);
+  });
+
   it("skip a Previous number above the count for Pairs too", async () => {
     const race = await newRace("Stundenlauf");
     for (let i = 0; i < 3; i++) await submit(race, pair()); // 1001–1003

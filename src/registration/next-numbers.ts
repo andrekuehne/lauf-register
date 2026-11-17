@@ -11,17 +11,29 @@ import type { PerSeries } from "../races/next-number-input";
 export const lastNumberColumn = (series: SingleOrPair) => `last_${series}_number`;
 
 /**
- * SQL for the numbers the count can't hand out in the Race of the enclosing
- * query's `races` row: taken by a Registration, Reserved, or a Previous number
- * (a confirmation screen may still show it).
+ * SQL for the numbers from `fromSql` to `toSql` (SQL expressions) that the
+ * count can't hand out in the Race of the enclosing query's `races` row: taken
+ * by a Registration, Reserved, or a Previous number (a confirmation screen may
+ * still show it). Each lookup reads only that stretch of numbers, not every
+ * number of the Race: on the Workers Free plan, D1 allows only so many rows read
+ * per day. Previous numbers are few, so SQLite goes through them and looks up
+ * each one's Registration (CROSS JOIN keeps that order), rather than going
+ * through every Registration of the Race.
  */
-const UNAVAILABLE_NUMBERS = `
-  SELECT number FROM registrations WHERE race_id = races.id
-  UNION SELECT number FROM reserved_numbers WHERE race_id = races.id
-  UNION SELECT p.number FROM previous_numbers p JOIN registrations r ON r.id = p.registration_id WHERE r.race_id = races.id`;
+const unavailableNumbersSql = (fromSql: string, toSql: string) => `
+  SELECT number FROM registrations WHERE race_id = races.id AND number BETWEEN ${fromSql} AND ${toSql}
+  UNION SELECT number FROM reserved_numbers WHERE race_id = races.id AND number BETWEEN ${fromSql} AND ${toSql}
+  UNION SELECT p.number FROM previous_numbers p CROSS JOIN registrations r ON r.id = p.registration_id
+    WHERE r.race_id = races.id AND p.number BETWEEN ${fromSql} AND ${toSql}`;
 
 /** SQL for where a series' count starts looking: its First number, or above the number it handed out last. */
 const startSql = (series: SingleOrPair) => `MAX(races.first_${series}_number, races.${lastNumberColumn(series)} + 1)`;
+
+/**
+ * SQL for the unavailable numbers a series' count can still come to: from where
+ * it starts looking to the top of its range. Those outside can't hold it up.
+ */
+const unavailableAheadSql = (series: SingleOrPair) => unavailableNumbersSql(startSql(series), String(NUMBER_RANGES[series].to));
 
 /**
  * SQL for the next automatic number of a series in the Race of the enclosing
@@ -34,15 +46,17 @@ const startSql = (series: SingleOrPair) => `MAX(races.first_${series}_number, ra
 export function nextNumberSql(series: SingleOrPair, beingReserved = false): string {
   const { to } = NUMBER_RANGES[series];
   const start = startSql(series);
-  // The smallest free number is the start itself or right after an unavailable one, or after the range about to be.
+  // The smallest free number is the start itself or right after an unavailable
+  // one ahead of the count, or after the range about to be Reserved.
+  const unavailable = unavailableAheadSql(series);
   return `(
     SELECT MIN(candidate) FROM (
       SELECT ${start} AS candidate
-      UNION SELECT number + 1 FROM (${UNAVAILABLE_NUMBERS})
+      UNION SELECT number + 1 FROM (${unavailable})
       ${beingReserved ? "UNION SELECT ? + 1" : ""}
     )
     WHERE candidate >= ${start} AND candidate <= ${to}
-      AND candidate NOT IN (${UNAVAILABLE_NUMBERS})
+      AND candidate NOT IN (${unavailable})
       ${beingReserved ? "AND candidate NOT BETWEEN ? AND ?" : ""}
   )`;
 }
@@ -75,13 +89,21 @@ export async function setNextNumbers(
     });
     if (SINGLE_OR_PAIR.some((s) => listed[s] !== undefined && confirmed[s] !== listed[s])) return { toConfirm: listed };
     if (series.length === 0) return { saved: await raceExists(db, raceId) };
+    // Numbered parameters (?1, ?2 …), as unavailableNumbersSql repeats its bounds in each of its lookups.
+    const values: number[] = [];
+    const parameter = (value: number) => {
+      values.push(value);
+      return `?${values.length}`;
+    };
     // The count starts looking above the number it handed out last.
+    const setLastNumbers = series.map((s) => `${lastNumberColumn(s)} = ${parameter(changed[s]! - 1)}`).join(", ");
+    // Only while the numbers it goes back over are still those just listed.
+    const sameNumbersPassed = passed
+      .map((p, i) => `AND (SELECT COUNT(*) FROM (${unavailableNumbersSql(parameter(changed[series[i]!]!), parameter(p.last))})) = ${parameter(p.unavailable)}`)
+      .join(" ");
     const result = await db
-      .prepare(
-        `UPDATE races SET ${series.map((s) => `${lastNumberColumn(s)} = ?`).join(", ")}
-         WHERE id = ? ${series.map(() => `AND (SELECT COUNT(*) FROM (${UNAVAILABLE_NUMBERS}) WHERE number BETWEEN ? AND ?) = ?`).join(" ")}`,
-      )
-      .bind(...series.map((s) => changed[s]! - 1), raceId, ...passed.flatMap((p, i) => [changed[series[i]!]!, p.last, p.unavailable]))
+      .prepare(`UPDATE races SET ${setLastNumbers} WHERE id = ${parameter(raceId)} ${sameNumbersPassed}`)
+      .bind(...values)
       .run();
     if (result.meta.changes > 0) return { saved: true };
     if (!(await raceExists(db, raceId))) return { saved: false };
@@ -102,8 +124,8 @@ async function passedOver(db: D1Database, raceId: number, series: SingleOrPair, 
   const row = await db
     .prepare(
       `SELECT races.${last} AS last,
-         (SELECT group_concat(number) FROM (${UNAVAILABLE_NUMBERS}) WHERE number BETWEEN ? AND races.${last}) AS unavailable
-       FROM races WHERE id = ?`,
+         (SELECT group_concat(number) FROM (${unavailableNumbersSql("?1", `races.${last}`)})) AS unavailable
+       FROM races WHERE id = ?2`,
     )
     .bind(from, raceId)
     .first<{ last: number; unavailable: string | null }>();
@@ -122,7 +144,7 @@ export function numbersLeft(db: D1Database, raceId: number): Promise<Record<Sing
   return perSeries<number>(db, raceId, (series) => {
     const start = startSql(series);
     const { to } = NUMBER_RANGES[series];
-    return `MAX(0, ${to} - ${start} + 1 - (SELECT COUNT(*) FROM (${UNAVAILABLE_NUMBERS}) WHERE number BETWEEN ${start} AND ${to}))`;
+    return `MAX(0, ${to} - ${start} + 1 - (SELECT COUNT(*) FROM (${unavailableAheadSql(series)})))`;
   });
 }
 

@@ -10,8 +10,8 @@ import { countingRowsRead } from "./d1-rows";
 // The two allowed test doubles: the admin identity and the clock. A request is
 // "signed in" as whatever email the x-test-admin header names; without it,
 // it's anonymous. The clock stands still at TODAY unless a test moves it (atClock).
-// Besides them, rowsReadByAdmin counts the rows the database reads: a meter on
-// the real database (test/d1-rows.ts), not a stand-in for it.
+// Besides them, rowsReadByAdmin and rowsReadBySubmit count the rows the database
+// reads: a meter on the real database (test/d1-rows.ts), not a stand-in for it.
 const testIdentity: AdminIdentity = async (c) => c.req.header("x-test-admin") ?? null;
 const TEST_NOW = new Date("2025-11-01T10:00:00Z"); // 11:00 in Berlin
 /** The tests' today (2025-11-01) in the organizers' time zone: Races dated before it are in the past. */
@@ -45,15 +45,21 @@ async function fetchWith(appEnv: typeof env, path: string, init: RequestInit) {
 export const asAdmin = (path: string, init: RequestInit = {}) =>
   request(path, { ...init, headers: { "x-test-admin": ADMIN, ...(init.headers ?? {}) } });
 
-/** How many database rows an Admin opening `path` reads, summed over every query of the request. */
-export async function rowsReadByAdmin(path: string): Promise<number> {
+/** How many database rows a request reads, summed over every query it makes; it must answer 200. */
+async function rowsReadBy(path: string, init: RequestInit): Promise<number> {
   const counting = countingRowsRead(env.DB);
-  const res = await fetchWith({ ...env, DB: counting.db }, path, { headers: { "x-test-admin": ADMIN } });
+  const res = await fetchWith({ ...env, DB: counting.db }, path, init);
   expect(res.status).toBe(200);
-  // Read the page to its end, so that a query made while it is being sent counts too.
+  // Read the answer to its end, so that a query made while it is being sent counts too.
   await res.arrayBuffer();
   return counting.rowsRead();
 }
+
+/** How many database rows an Admin opening `path` reads. */
+export const rowsReadByAdmin = (path: string) => rowsReadBy(path, { headers: { "x-test-admin": ADMIN } });
+
+/** How many database rows submitting a Registration through the public link reads. */
+export const rowsReadBySubmit = (raceLink: string, body: unknown) => rowsReadBy(registrationsPath(raceLink), submission(body));
 
 /** Posts an admin form, signed in as the test Admin unless other headers are given. */
 function postForm(path: string, fields: Record<string, string>, headers: Record<string, string>) {
@@ -179,13 +185,17 @@ export async function publicLinks(): Promise<string[]> {
 }
 
 /** Submits a Registration through the public link, as the browser flow does. */
-export function submit(raceLink: string, body: unknown) {
-  return request(`${raceLink}/registrations`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
+export const submit = (raceLink: string, body: unknown) => request(registrationsPath(raceLink), submission(body));
+
+/** Where the browser flow submits a Registration for the Race behind a public link. */
+const registrationsPath = (raceLink: string) => `${raceLink}/registrations`;
+
+/** A Registration's submit request, as the browser flow sends it. */
+const submission = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body),
+});
 
 /** The Registration number a successful submit answered with. */
 export async function numberOf(res: Response): Promise<number> {

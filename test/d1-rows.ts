@@ -14,8 +14,10 @@ export function countingRowsRead(db: D1Database): { db: D1Database; rowsRead: ()
     total += result.meta.rows_read;
     return result;
   };
-  const countingStatement = (statement: D1PreparedStatement): D1PreparedStatement =>
-    new Proxy(statement, {
+  // db.batch() takes only D1's own statements, not the counting stand-ins.
+  const ownStatements = new WeakMap<D1PreparedStatement, D1PreparedStatement>();
+  const countingStatement = (statement: D1PreparedStatement): D1PreparedStatement => {
+    const standIn = new Proxy(statement, {
       get(target, property) {
         switch (property) {
           case "bind":
@@ -35,11 +37,21 @@ export function countingRowsRead(db: D1Database): { db: D1Database; rowsRead: ()
         }
       },
     });
+    ownStatements.set(standIn, statement);
+    return standIn;
+  };
   const countingDb = new Proxy(db, {
-    get: (target, property) =>
-      property === "prepare"
-        ? (sql: string) => countingStatement(target.prepare(sql))
-        : passThroughExcept(target, property, ["batch", "exec", "withSession"]),
+    get(target, property) {
+      switch (property) {
+        case "prepare":
+          return (sql: string) => countingStatement(target.prepare(sql));
+        case "batch":
+          return async (statements: D1PreparedStatement[]) =>
+            (await target.batch(statements.map((s) => ownStatements.get(s) ?? s))).map(addRowsRead);
+        default:
+          return passThroughExcept(target, property, ["exec", "withSession"]);
+      }
+    },
   });
   return { db: countingDb, rowsRead: () => total };
 }

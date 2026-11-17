@@ -14,8 +14,10 @@ import {
   publicLinks,
   request,
   rowsReadByAdmin,
+  rowsReadBySubmit,
   setRegistration,
   setRegistrationOnRacePage,
+  settingsPath,
   submit,
   TODAY,
 } from "./http";
@@ -228,8 +230,13 @@ describe("opening and closing Registration", () => {
 });
 
 describe("database rows read on race day", () => {
-  // On the Workers Free plan, D1 allows 5 million rows read per day; Admins reload these pages all day long.
-  it("reloading the start page or the Race page of an open Race with 150 Registrations reads fewer than 2,000 rows each", async () => {
+  // On the Workers Free plan, D1 allows 5 million rows read per day; Participants
+  // submit and Admins reload these pages all day long. Each limit leaves room
+  // above what the request reads today (a submit about 30 rows, the Race page
+  // about 500, the settings page about 260, the start page about 150), and sits
+  // far below what it read while every number of the Race was looked up
+  // (2,700, 4,700, 3,100 and 3,300).
+  it("with 150 Registrations in an open Race: the Race page reads fewer than 700 rows, the settings page 500, the start page 2,000, a submit 100", async () => {
     const link = await newRace("Nikolauslauf", "2026-12-09", { firstSingleNumber: 181, firstPairNumber: 1061 });
     expect((await postReserve(link, "1-180")).status).toBe(303);
     expect((await postReserve(link, "1001-1060")).status).toBe(303);
@@ -237,8 +244,10 @@ describe("database rows read on race day", () => {
       expect((await submit(link, i % 4 === 3 ? pairRegistration() : registration())).status).toBe(200);
     }
 
-    expect(await rowsReadByAdmin(adminRacePath(link))).toBeLessThan(2000);
+    expect(await rowsReadByAdmin(adminRacePath(link))).toBeLessThan(700);
+    expect(await rowsReadByAdmin(settingsPath(link))).toBeLessThan(500);
     expect(await rowsReadByAdmin("/admin")).toBeLessThan(2000);
+    expect(await rowsReadBySubmit(link, registration())).toBeLessThan(100);
   });
 });
 
