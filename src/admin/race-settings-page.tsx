@@ -16,8 +16,8 @@ import { firstNumberOf, type Race } from "../races/races";
 import type { NextNumbers } from "../registration/next-numbers";
 import type { StoredRegistration } from "../registration/registrations";
 import type { Move } from "../registration/reserved-numbers";
-import { AdminPage } from "./admin-page";
-import { nextNumbersSectionPath, participantNames, racePath, SERIES_NAMES, settingsPath } from "./registrations-page";
+import { AdminPage, SERIES_NAMES } from "./admin-page";
+import { nextNumbersSectionPath, participantNames, racePath, settingsPath } from "./registrations-page";
 
 /** A Registration number field of a series: the number, the numbers allowed below it (with `note` before them), and any error. */
 function NumberField(props: { id: string; name: string; label: string; value: string; from: number; series: SingleOrPair; note?: string; error?: string }) {

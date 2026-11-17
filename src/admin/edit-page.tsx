@@ -11,8 +11,8 @@ import type { AppEnv } from "../language";
 import type { Race } from "../races/races";
 import { validateRegistrationEdit, type RegistrationContent, type RegistrationIssue } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
-import { AdminPage } from "./admin-page";
-import { editPath, participantNames, racePath, SERIES_NAMES } from "./registrations-page";
+import { AdminPage, SERIES_NAMES } from "./admin-page";
+import { editPath, participantNames, racePath } from "./registrations-page";
 
 const t = strings("de").flow;
 

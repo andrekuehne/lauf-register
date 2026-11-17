@@ -1,7 +1,9 @@
-// Reserved numbers in D1 (see GLOSSARY.md): listing a Race's, reserving a number
-// or range (giving Registrations on it new numbers), and removing a range.
+// Reserved numbers in D1 (see GLOSSARY.md): listing a Race's (also together with
+// its Next numbers), reserving a number or range (giving Registrations on it new
+// numbers), and removing a range.
 
 import type { ReservedRange } from "../domain/reserved-numbers";
+import { nextNumbers, type NextNumbers } from "./next-numbers";
 import { isNoNumberLeft, isOnReservedNumber, listRegistrationsWithin, renumberStatements, type StoredRegistration } from "./registrations";
 
 /** A Race's Reserved numbers, ascending. */
@@ -11,6 +13,15 @@ export async function listReservedNumbers(db: D1Database, raceId: number): Promi
     .bind(raceId)
     .all<{ number: number }>();
   return results.map((row) => row.number);
+}
+
+/** A Race's Next numbers and its Reserved numbers (ascending). */
+export type NextAndReserved = { next: NextNumbers; reserved: number[] };
+
+/** The Race's Next numbers and Reserved numbers; null when there is no such Race. */
+export async function nextAndReservedNumbers(db: D1Database, raceId: number): Promise<NextAndReserved | null> {
+  const [next, reserved] = await Promise.all([nextNumbers(db, raceId), listReservedNumbers(db, raceId)]);
+  return next && { next, reserved };
 }
 
 /** Removes the range's numbers from the Race's Reserved numbers. Registrations keep the numbers they have. */

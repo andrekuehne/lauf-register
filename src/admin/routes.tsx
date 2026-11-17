@@ -18,8 +18,8 @@ import {
   updateRegistration,
   type StoredRegistration,
 } from "../registration/registrations";
-import { nextNumbers, numbersLeft, setNextNumbers } from "../registration/next-numbers";
-import { listReservedNumbers, removeReservedNumbers, reserveNumbers } from "../registration/reserved-numbers";
+import { numbersLeft, setNextNumbers } from "../registration/next-numbers";
+import { nextAndReservedNumbers, removeReservedNumbers, reserveNumbers, type NextAndReserved } from "../registration/reserved-numbers";
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
 import { AdminPage, problemPage, registrationCount } from "./admin-page";
@@ -51,8 +51,11 @@ function NewRaceForm(props: { values?: RaceFormValues; errors?: RaceInputErrors 
   );
 }
 
+/** A Race on the start page, with its Next and Reserved numbers for the toggle's question. */
+type RaceCard = RaceListItem & { numbers: NextAndReserved };
+
 /** Each Race as a card: its Registrations, its public page, its QR code, and the open/closed toggle. */
-function RaceList(props: { races: RaceListItem[]; requestUrl: string }) {
+function RaceList(props: { races: RaceCard[]; requestUrl: string }) {
   if (props.races.length === 0) return <p class="muted">Noch keine Läufe angelegt.</p>;
   return (
     <>
@@ -70,7 +73,7 @@ function RaceList(props: { races: RaceListItem[]; requestUrl: string }) {
                 <QrButton label="QR-Code" race={race} class="btn btn-secondary btn-compact" />
               </div>
             </div>
-            <RegistrationToggle race={race} />
+            <RegistrationToggle race={race} numbers={race.numbers} />
             <small class="muted">angelegt von {race.createdBy}</small>
           </li>
         ))}
@@ -81,7 +84,7 @@ function RaceList(props: { races: RaceListItem[]; requestUrl: string }) {
 }
 
 async function racesPage(c: Context<AppEnv>, form?: { values: RaceFormValues; errors: RaceInputErrors }) {
-  const races = await listRaces(c.env.DB);
+  const races = await raceCards(c.env.DB);
   return c.html(
     <AdminPage url={c.req.url} admin={c.get("adminEmail")}>
       <NewRaceForm values={form?.values} errors={form?.errors} />
@@ -90,6 +93,17 @@ async function racesPage(c: Context<AppEnv>, form?: { values: RaceFormValues; er
     </AdminPage>,
     form ? 400 : 200,
   );
+}
+
+/** Every Race with its numbers; a Race deleted by another Admin in the meantime is left out. */
+async function raceCards(db: D1Database): Promise<RaceCard[]> {
+  const cards = await Promise.all(
+    (await listRaces(db)).map(async (race) => {
+      const numbers = await nextAndReservedNumbers(db, race.id);
+      return numbers && { ...race, numbers };
+    }),
+  );
+  return cards.filter((card) => card !== null);
 }
 
 const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
@@ -135,10 +149,11 @@ async function settingsPage(
   } = {},
 ) {
   const { form = { values: raceFormValues(race), errors: {} } } = shows;
-  const [next, numbers] = await Promise.all([nextNumbers(c.env.DB, race.id), listReservedNumbers(c.env.DB, race.id)]);
+  const found = await nextAndReservedNumbers(c.env.DB, race.id);
   // Deleted by another Admin in the meantime.
-  if (!next) return problemPage(c, RACE_NOT_FOUND, 404);
-  return raceSettingsPage(c, race, form.values, form.errors, { ...shows.next, next }, { ...shows.reserved, numbers });
+  if (!found) return problemPage(c, RACE_NOT_FOUND, 404);
+  const { next, reserved } = found;
+  return raceSettingsPage(c, race, form.values, form.errors, { ...shows.next, next }, { ...shows.reserved, numbers: reserved });
 }
 
 /** Runs `then` with the Race named by the URL's token, or answers 404. */
@@ -195,10 +210,14 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
 
   admin.get("/races/:token", (c) =>
     withRace(c, async (race) => {
-      const [registrations, left] = await Promise.all([listRegistrations(c.env.DB, race.id), numbersLeft(c.env.DB, race.id)]);
+      const [registrations, left, numbers] = await Promise.all([
+        listRegistrations(c.env.DB, race.id),
+        numbersLeft(c.env.DB, race.id),
+        nextAndReservedNumbers(c.env.DB, race.id),
+      ]);
       // Deleted by another Admin in the meantime.
-      if (!left) return problemPage(c, RACE_NOT_FOUND, 404);
-      return raceRegistrationsPage(c, race, registrations, left);
+      if (!left || !numbers) return problemPage(c, RACE_NOT_FOUND, 404);
+      return raceRegistrationsPage(c, race, registrations, left, numbers);
     }),
   );
 

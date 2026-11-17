@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { raw } from "hono/html";
 import type { Child } from "hono/jsx";
+import type { SingleOrPair } from "../domain/categories";
 import { confirmBundle } from "../generated/confirm-bundle";
 import type { AppEnv } from "../language";
 import { Layout } from "../layout";
@@ -28,6 +29,9 @@ export function problemPage(c: Context<AppEnv>, text: string, status: 400 | 404 
     status,
   );
 }
+
+/** Series as the admin pages' notices name them. */
+export const SERIES_NAMES: Record<SingleOrPair, string> = { single: "Einzelne", pair: "Paare" };
 
 /** "1 Anmeldung", "12 Anmeldungen" */
 export const registrationCount = (count: number) => `${count} ${count === 1 ? "Anmeldung" : "Anmeldungen"}`;

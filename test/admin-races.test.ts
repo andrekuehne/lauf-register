@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { links, raceCard, registrationToggle } from "./admin-html";
+import { pairRegistration, registration } from "./fixtures";
 import {
   ADMIN,
   adminRacePath,
@@ -9,10 +10,12 @@ import {
   newRace,
   ORIGIN,
   postRace,
+  postReserve,
   publicLinks,
   request,
   setRegistration,
   setRegistrationOnRacePage,
+  submit,
   TODAY,
 } from "./http";
 import { qrLayerOpenedBy, qrLayers, qrTexts } from "./qr";
@@ -137,7 +140,10 @@ describe("opening and closing Registration", () => {
       offer: {
         text: "Offen",
         open: "1",
-        confirm: "Anmeldung für ‚Stundenlauf‘ öffnen? Teilnehmende können sich dann über den Link anmelden.",
+        confirm:
+          "Anmeldung für ‚Stundenlauf‘ öffnen? Teilnehmende können sich dann über den Link anmelden.\n" +
+          "Nächste Startnummern: Einzelne 1, Paare 1001.\n" +
+          "Gesperrt: keine.",
       },
     });
     expect(opened.status).toBe(303);
@@ -152,6 +158,34 @@ describe("opening and closing Registration", () => {
     });
     expect(closed.status).toBe(303);
     expect(registrationToggle(closedAgainCard)?.state).toBe("✓ Geschlossen");
+  });
+
+  it("asks before opening with where each series counts on and the Reserved numbers, on the start page and the Race's page", async () => {
+    const link = await newRace("Stundenlauf", "2026-12-09", { open: false });
+    expect((await postReserve(link, "1-180")).status).toBe(303);
+    expect((await postReserve(link, "1001-1060")).status).toBe(303);
+
+    const onStartPage = registrationToggle(raceCard(await (await asAdmin("/admin")).text(), "Stundenlauf"));
+    const onRacePage = registrationToggle(await (await asAdmin(adminRacePath(link))).text());
+
+    const asked =
+      "Anmeldung für ‚Stundenlauf‘ öffnen? Teilnehmende können sich dann über den Link anmelden.\n" +
+      "Nächste Startnummern: Einzelne 181, Paare 1061.\n" +
+      "Gesperrt: 1–180, 1001–1060.";
+    expect(onStartPage?.offer.confirm).toBe(asked);
+    expect(onRacePage?.offer.confirm).toBe(asked);
+  });
+
+  it("asks with the numbers handed out next once some are taken, and says when a series has none left", async () => {
+    const link = await newRace("Stundenlauf", "2026-12-09", { firstSingleNumber: 998 });
+    await submit(link, registration()); // 998
+    await submit(link, registration()); // 999
+    await submit(link, pairRegistration()); // 1001
+    await setRegistration(link, false);
+
+    const toggle = registrationToggle(await (await asAdmin(adminRacePath(link))).text());
+
+    expect(toggle?.offer.confirm).toContain("\nNächste Startnummern: Einzelne: keine mehr frei, Paare 1002.\nGesperrt: keine.");
   });
 
   it("shows each Race's own state in the list", async () => {

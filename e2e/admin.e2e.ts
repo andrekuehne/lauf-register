@@ -18,13 +18,19 @@ async function tapToggle(page: Page, scope: Locator, half: "Offen" | "Geschlosse
 
 const state = (scope: Locator) => scope.getByRole("button", { pressed: true });
 
-test("opening Registration asks first: Abbrechen keeps it closed, OK opens it", async ({ page }) => {
-  const link = await newRace(page, { open: false });
+test("opening Registration asks first, showing the Next numbers and the Reserved numbers: Abbrechen keeps it closed, OK opens it", async ({ page }) => {
+  const link = await newRace(page, { open: false, firstPairNumber: 1061 });
+  await page.goto(`${adminRacePath(link)}/settings`);
+  await page.getByLabel("Startnummer oder Bereich sperren").fill("1-180");
+  await page.getByRole("button", { name: "Sperren", exact: true }).tap();
+  await expect(page.getByRole("button", { name: "1–180 entsperren" })).toBeVisible();
+  await page.goto("/admin");
   const card = raceCard(page, link);
   await expect(state(card)).toHaveText("✓ Geschlossen");
 
   const question = await tapToggle(page, card, "Offen", "Abbrechen");
   expect(question).toMatch(/^Anmeldung für ‚E2E-Lauf \w+‘ öffnen\?/);
+  expect(question).toContain("\nNächste Startnummern: Einzelne 181, Paare 1061.\nGesperrt: 1–180.");
   await expect(state(card)).toHaveText("✓ Geschlossen");
   await page.reload();
   await expect(state(raceCard(page, link))).toHaveText("✓ Geschlossen");
