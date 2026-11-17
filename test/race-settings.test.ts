@@ -147,6 +147,14 @@ describe("Reserved numbers on the Race settings page", () => {
     expect(pageText(page)).toContain("Keine gesperrten Startnummern.");
   });
 
+  it("explains that they are never handed out, neither by the count nor by hand", async () => {
+    const race = await newRace("Stundenlauf");
+
+    const page = await (await asAdmin(settingsPath(race))).text();
+
+    expect(pageText(page)).toContain("Werden nie vergeben, weder automatisch noch von Hand, z. B. wenn eine Startnummer verloren gegangen ist.");
+  });
+
   it("refuses what it can't read with a German message, keeping what was typed and reserving nothing", async () => {
     const race = await newRace("Stundenlauf");
 

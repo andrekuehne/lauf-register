@@ -196,7 +196,7 @@ function ReservedSection(props: { race: Race; state: ReservedSectionState }) {
   return (
     <section class="card" id="reserved">
       <h2>Gesperrte Startnummern</h2>
-      <p class="muted form-note">Werden bei neuen Anmeldungen übersprungen, z. B. wenn eine Startnummer verloren gegangen ist.</p>
+      <p class="muted form-note">Werden nie vergeben, weder automatisch noch von Hand, z. B. wenn eine Startnummer verloren gegangen ist.</p>
       {state.moves && state.moves.length > 0 && (
         <div class="notice" role="status">
           <p><b>Neue Startnummern, bitte am Anmeldetisch neu ausgeben:</b></p>

@@ -209,7 +209,7 @@ export function editRegistrationPage(c: Context<AppEnv>, race: Race, registratio
         <div class="card">
           <TextField name="number" label="Startnummer" value={values.number} errors={errors} digits={4} />
           <div class="field">
-            <span class="label">Lauf</span>
+            <span class="label">Dauer</span>
             <div class="pills">
               {DURATIONS.map((d) => <Choice name="duration" value={String(d)} checked={values.duration === String(d)} label={t.durations[d].name} />)}
             </div>

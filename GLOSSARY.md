@@ -23,7 +23,7 @@ _Avoid_: Class, type (and *Gender*, which belongs to a Participant)
 **Duration**:
 The length of the timed run: *30 min* or *60 min*.
 _Avoid_: Distance, race type
-_German (UI)_: Halbstundenlauf, Stundenlauf
+_German (UI)_: Dauer (choice), Halbstundenlauf, Stundenlauf
 
 **Category**:
 The combination of one Division and one Duration (e.g. "Mixed pair · 30 min"); every Race offers the same fixed set of ten Categories.

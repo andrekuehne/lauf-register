@@ -43,6 +43,15 @@ describe("the edit form", () => {
     expect(html).toContain('value="Beispiel"');
   });
 
+  it("offers the Durations under „Dauer“", async () => {
+    const race = await newRace("Stundenlauf");
+    await register(race, [anna]);
+
+    const html = await (await asAdmin(editPath(race, 1))).text();
+
+    expect(pageText(html)).toContain("Dauer Halbstundenlauf Stundenlauf");
+  });
+
   it("is reached from the Registration on the Race's admin page", async () => {
     const race = await newRace("Stundenlauf");
     await register(race, [anna]);

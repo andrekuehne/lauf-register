@@ -40,7 +40,7 @@ const de = {
     stepOf: "Schritt {n} von {total}",
     back: "Zurück",
     next: "Weiter",
-    durationHeading: "Welcher Lauf?",
+    durationHeading: "Wie lange?",
     durations: {
       "30": { name: "Halbstundenlauf", short: "1/2 h", detail: "30 Minuten" },
       "60": { name: "Stundenlauf", short: "1 h", detail: "60 Minuten" },
@@ -136,7 +136,7 @@ const en: Strings = {
     stepOf: "Step {n} of {total}",
     back: "Back",
     next: "Next",
-    durationHeading: "Which run?",
+    durationHeading: "How long?",
     durations: {
       "30": { name: "Half-hour run", short: "1/2 h", detail: "30 minutes" },
       "60": { name: "One-hour run", short: "1 h", detail: "60 minutes" },

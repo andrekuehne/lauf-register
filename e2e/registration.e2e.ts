@@ -279,6 +279,16 @@ test.describe("an unusual age gets a hint to check, without blocking", () => {
   }
 });
 
+test("the first step asks how long, in German and in English", async ({ page }) => {
+  const race = await newRace(page);
+  await page.goto(race);
+  await expect(stepHeading(page)).toHaveText("Wie lange?");
+
+  await page.getByRole("link", { name: "English" }).tap();
+
+  await expect(stepHeading(page)).toHaveText("How long?");
+});
+
 test("Deutsch / English switch in the middle of the flow keeps the choices and details", async ({ page }) => {
   const race = await newRace(page);
   await page.goto(race);
