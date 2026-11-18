@@ -19,6 +19,7 @@ import { registrationCount } from "../shared/registration-count";
 import { AdminPage } from "./admin-page";
 import { RegistrationToggle, type RaceWithToggle } from "./registration-toggle";
 import {
+  addPath,
   CategoryLabel,
   deleteRegistrationPath,
   deskLivePath,
@@ -51,7 +52,7 @@ export function DeskRow(props: { race: Race; registration: StoredRegistration })
         {registration.previousNumbers.length > 0 && <small class="muted">vorher {registration.previousNumbers.join(", ")}</small>}
       </div>
       <div class="desk-who">
-        <CategoryLabel registration={registration} />
+        <CategoryLabel division={division} duration={registration.duration} />
         {registration.participants.map((p) => (
           <p class="reg-person">
             <b>{fullName(p)}</b> <span class="muted">· {p.birthYear} · {p.club ?? t.noClub}</span>
@@ -154,7 +155,7 @@ export function deskPage(c: Context<AppEnv>, race: RaceWithToggle, registrations
       <p class="muted desk-connection" role="status" hidden {...{ [DESK_LIVE.connection]: "" }}></p>
       <div class="desk">
         <div class="desk-main">
-          <RegistrationSearch autofocus />
+          <RegistrationSearch autofocus add={addPath(race)} />
           <p class="muted desk-empty" hidden={registrations.length > 0}>
             Noch keine Anmeldungen.
           </p>

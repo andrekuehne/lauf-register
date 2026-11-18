@@ -5,7 +5,7 @@ import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DeskUpdate } from "../src/shared/desk-update";
 import { pageText, registrationToggle } from "./admin-html";
-import { anna, ben, editForm, registration } from "./fixtures";
+import { addForm, anna, ben, editForm, registration } from "./fixtures";
 import {
   ADMIN,
   ORIGIN,
@@ -13,6 +13,7 @@ import {
   newRace,
   nextNumbersForm,
   numberOf,
+  postAdd,
   postDelete,
   postEdit,
   postNextNumbers,
@@ -116,6 +117,18 @@ describe("what a connected Anmeldetisch is sent", () => {
     expect(rowText(update)).toMatch(/^1001 .*Mixed-Paar · Halbstundenlauf.*Dr\. Ben Beispiel · 1990 · ohne Verein.*Dr\. Anna Muster · 1985 · LG Nord/);
     expect(pageText(update.status)).toContain("✓ Offen");
     expect(pageText(update.status)).toContain("Paare: noch 998 Startnummern frei.");
+  });
+
+  it("a Registration an Admin adds at the Anmeldetisch, while Registration is closed: its row, as for a phone Registration", async () => {
+    const race = await newRace("Stundenlauf", "2026-12-09", { open: false });
+    const screen = await connect(race);
+
+    expect((await postAdd(race, addForm(30, [ben]))).status).toBe(200);
+
+    const update = await screen.next();
+    expect(update.changed).toHaveLength(1);
+    expect(rowText(update)).toMatch(/^1 .*Männer · Halbstundenlauf.*Ben Beispiel · 1990 · ohne Verein/);
+    expect(pageText(update.status)).toContain("Einzelne: noch 998 Startnummern frei.");
   });
 
   it("a Registration edited: its row as stored now, under the same id", async () => {

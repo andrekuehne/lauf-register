@@ -3,6 +3,7 @@ import { csrf } from "hono/csrf";
 import { raceResultFileName, raceResultRows, RACERESULT_SHEET } from "../export/raceresult";
 import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
 import type { SingleOrPair } from "../domain/categories";
+import { seriesOf } from "../domain/numbers";
 import { parseReservedRange } from "../domain/reserved-numbers";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
@@ -20,6 +21,7 @@ import {
 } from "../races/race-input";
 import { createRace, deleteRace, findRaceByToken, listRaces, setRegistrationOpen, updateRace, type Race, type RaceListItem } from "../races/races";
 import {
+  addRegistration,
   countRegistrations,
   deleteRegistration,
   findRegistration,
@@ -33,6 +35,7 @@ import { nextAndReservedNumbers, removeReservedNumbers, reserveNumbers } from ".
 import { registrationCount } from "../shared/registration-count";
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
+import { addedPage, addRegistrationPage, checkAdd, newAddValues, postedAddValues } from "./add-page";
 import { AdminPage, openedFrom, problemPage, racePageFrom, REGISTRATION_FIELD, type RacePage } from "./admin-page";
 import { connectDesk, notifyDesk } from "./desk-live";
 import { deskPage } from "./desk-page";
@@ -385,6 +388,22 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
       }
       await deleteRace(c.env.DB, race.id);
       return c.redirect("/admin", 303);
+    }),
+  );
+
+  admin.get("/races/:token/registrations/new", (c) => withRace(c, async (race) => addRegistrationPage(c, race, newAddValues())));
+
+  admin.post("/races/:token/registrations/new", (c) =>
+    withRace(c, async (race) => {
+      const values = postedAddValues(await c.req.parseBody());
+      const checked = checkAdd(values, raceYear(race));
+      if (!checked.ok) return addRegistrationPage(c, race, values, checked.errors);
+      // Saved twice (a double click, a reload that posts again): the same attempt, the Registration stored the first time.
+      const result = await addRegistration(c.env.DB, race.id, checked.input);
+      if ("full" in result) return addRegistrationPage(c, race, values, {}, seriesOf(checked.input.participants));
+      notifyDesk(c, race.token, { changed: [result.id] });
+      // Answered right here rather than after a redirect: a reload posts the same attempt again and shows the same number.
+      return addedPage(c, race, result.answer);
     }),
   );
 

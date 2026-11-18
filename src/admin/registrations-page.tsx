@@ -2,7 +2,7 @@
 
 import type { Context } from "hono";
 import { raw } from "hono/html";
-import { DIVISIONS, GENDER_LETTER, SINGLE_OR_PAIR, type Duration, type SingleOrPair } from "../domain/categories";
+import { DIVISIONS, GENDER_LETTER, SINGLE_OR_PAIR, type Division, type Duration, type SingleOrPair } from "../domain/categories";
 import { raceSearchBundle } from "../generated/race-search-bundle";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
@@ -29,6 +29,8 @@ export const posterPath = (race: Race) => `${racePath(race)}/poster`;
 export const settingsPath = (race: Race) => `${racePath(race)}/settings`;
 /** The Anmeldetisch: the Race desk's screen for finding Registrations. */
 export const deskPath = (race: Race) => `${racePath(race)}/desk`;
+/** The Anmeldetisch's form for adding a Registration. */
+export const addPath = (race: Race) => `${racePath(race)}/registrations/new`;
 /** Where the Anmeldetisch's screen connects to for its live updates (a WebSocket). */
 export const deskLivePath = (race: Race) => `${deskPath(race)}/live`;
 /** Each of the Race's own pages: where it is, and what the way back to it is called. */
@@ -67,7 +69,7 @@ export const CancelTo = (props: { race: Race; page: RacePage }) => (
 export const DURATION_ORDER: readonly Duration[] = [60, 30];
 
 /** „Dr. Anna Muster“ */
-export function fullName(p: ParticipantInput): string {
+export function fullName(p: Pick<ParticipantInput, "title" | "firstName" | "lastName">): string {
   return `${p.title === "none" ? "" : `${t.titles[p.title]} `}${p.firstName} ${p.lastName}`;
 }
 
@@ -80,13 +82,13 @@ export function searchAttributes(registration: StoredRegistration) {
   return { [SEARCH_ATTRIBUTES.numbers]: keys.numbers, [SEARCH_ATTRIBUTES.names]: keys.names };
 }
 
-/** A Registration's Category in its colour, with the icon of its Division: „Frauen · Stundenlauf“. */
-export function CategoryLabel(props: { registration: StoredRegistration }) {
-  const division = divisionOfRegistration(props.registration);
+/** A Category in its colour, with the icon of its Division: „Frauen · Stundenlauf“. */
+export function CategoryLabel(props: { division: Division; duration: Duration }) {
+  const { division, duration } = props;
   return (
     <span class="reg-cat">
       <Icon svg={divisionIconSvg(division)} />
-      <span>{`${t.divisions[division].category} · ${t.durations[props.registration.duration].name}`}</span>
+      <span>{`${t.divisions[division].category} · ${t.durations[duration].name}`}</span>
     </span>
   );
 }
@@ -104,7 +106,7 @@ function RegistrationCard(props: {
     <li class={`card reg div-${division}`} data-registration={registration.number} {...searchAttributes(registration)}>
       <div class="reg-head">
         <b class="reg-no">{registration.number}</b>
-        <CategoryLabel registration={registration} />
+        <CategoryLabel division={division} duration={registration.duration} />
         <span class="muted reg-time">{formatRegistrationTime(registration.createdAt, race.date)}</span>
       </div>
       {/* The confirmation screen may still show an old number: the desk finds it here. */}
@@ -240,14 +242,27 @@ export function raceRegistrationsPage(
 /**
  * The search field above the list, for the Race desk. Hidden until its script
  * (src/client/race-search.ts) runs, so without JavaScript the page shows just
- * the whole list; with `autofocus`, the script puts the cursor in it.
+ * the whole list; with `autofocus`, the script puts the cursor in it. With
+ * `add`, the link to the form for adding a Registration sits beside the field,
+ * and „Keine passende Anmeldung.“ offers it, too.
  */
-export function RegistrationSearch(props: { autofocus?: boolean }) {
-  return (
+export function RegistrationSearch(props: { autofocus?: boolean; add?: string }) {
+  const { add } = props;
+  const search = (
     <div class="field reg-search" hidden>
       <label class="label" for={SEARCH_FIELD_ID}>Startnummer oder Name</label>
       <input type="search" id={SEARCH_FIELD_ID} autocomplete="off" autofocus={props.autofocus} />
-      <p class="muted reg-none" role="status" hidden>Keine passende Anmeldung.</p>
+      <p class="muted reg-none" role="status" hidden>
+        Keine passende Anmeldung.{add && <> <a href={add}>Anmeldung hinzufügen</a></>}
+      </p>
+    </div>
+  );
+  if (!add) return search;
+  // The way to add one beside the field, also without JavaScript (which shows the field).
+  return (
+    <div class="search-and-add">
+      {search}
+      <a href={add} class="btn btn-secondary btn-compact search-add">Anmeldung hinzufügen</a>
     </div>
   );
 }

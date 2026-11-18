@@ -25,6 +25,12 @@ export function editForm(number: number, duration: number, participants: Partici
   return fields;
 }
 
+/** The add form's fields as the browser posts them: single or Pair, Duration, then the Participants (two for a Pair). */
+export function addForm(duration: number, participants: Participant[]): Record<string, string> {
+  const { number: _, ...fields } = editForm(0, duration, participants);
+  return { kind: participants.length === 2 ? "pair" : "single", ...fields };
+}
+
 /** A valid Pair Registration for Anna and Ben in the Stundenlauf, with a fresh attempt ID. */
 export const pairRegistration = () => registration({ participants: [anna, ben] });
 

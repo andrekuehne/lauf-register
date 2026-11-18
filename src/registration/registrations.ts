@@ -1,5 +1,5 @@
-// Registrations in D1: storing a submitted Registration with its Participants,
-// listing a Race's Registrations, and editing or deleting one.
+// Registrations in D1: storing a submitted Registration with its Participants
+// (or one an Admin adds at the Race desk), listing a Race's Registrations, and editing or deleting one.
 
 import type { Duration, SingleOrPair } from "../domain/categories";
 import { seriesOf } from "../domain/numbers";
@@ -32,13 +32,25 @@ export type SubmitResult = { answer: SubmitAnswer; id: number } | { closed: true
  * stores nothing new, even after Registration has been closed in between (the
  * phone may never have received the first answer).
  */
-export async function submitRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<SubmitResult> {
+export const submitRegistration = (db: D1Database, raceId: number, input: RegistrationInput): Promise<SubmitResult> =>
+  storeRegistration(db, raceId, input, true);
+
+/**
+ * Stores a Registration an Admin adds at the Race desk, as `submitRegistration`
+ * does, whether Registration for the Race is open or closed: open and closed
+ * are about its link, which an Admin isn't using.
+ */
+export const addRegistration = (db: D1Database, raceId: number, input: RegistrationInput) =>
+  storeRegistration(db, raceId, input, false) as Promise<Exclude<SubmitResult, { closed: true }>>;
+
+async function storeRegistration(db: D1Database, raceId: number, input: RegistrationInput, onlyWhileOpen: boolean): Promise<SubmitResult> {
   for (let retry = 0; ; retry++) {
     const existing = await findByAttempt(db, raceId, input.attemptId);
     if (existing) return { answer: answerFor(existing.number, existing, !sameContent(existing, input)), id: existing.id };
     try {
-      const stored = await insertRegistration(db, raceId, input);
+      const stored = await insertRegistration(db, raceId, input, onlyWhileOpen);
       if (stored !== null) return { answer: answerFor(stored.number, input, false), id: stored.id };
+      if (!onlyWhileOpen) return { full: true };
       const open = await db.prepare("SELECT registration_open FROM races WHERE id = ?").bind(raceId).first<number>("registration_open");
       return open === 1 ? { full: true } : { closed: true };
     } catch (error) {
@@ -331,10 +343,15 @@ function answerFor(number: number, stored: RegistrationContent, differs: boolean
  * the attempt ID is already stored), nothing is kept, the last handed-out
  * number included. When there is no next number, nothing is stored.
  *
- * Every step only touches a Race whose Registration is open, so a Race closed
- * a moment ago stores nothing. Its number and id; null when nothing was stored.
+ * With `onlyWhileOpen`, it only stores for a Race whose Registration is open, so a
+ * Race closed a moment ago stores nothing. Its number and id; null when nothing was stored.
  */
-async function insertRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<{ number: number; id: number } | null> {
+async function insertRegistration(
+  db: D1Database,
+  raceId: number,
+  input: RegistrationInput,
+  onlyWhileOpen: boolean,
+): Promise<{ number: number; id: number } | null> {
   const series = seriesOf(input.participants);
   const lastColumn = lastNumberColumn(series);
   const nextNumber = nextNumberSql(series);
@@ -342,7 +359,7 @@ async function insertRegistration(db: D1Database, raceId: number, input: Registr
     .prepare(
       `INSERT INTO registrations (race_id, number, duration, attempt_id)
        SELECT id, ${nextNumber}, ?, ? FROM races
-       WHERE id = ? AND registration_open = 1 AND ${nextNumber} IS NOT NULL
+       WHERE id = ? ${onlyWhileOpen ? "AND registration_open = 1" : ""} AND ${nextNumber} IS NOT NULL
        RETURNING number, id`,
     )
     .bind(input.duration, input.attemptId, raceId);

@@ -88,6 +88,21 @@ export const deskPath = (raceLink: string) => `${adminRacePath(raceLink)}/desk`;
 /** The Race's A4 poster with its QR code. */
 export const posterPath = (raceLink: string) => `${adminRacePath(raceLink)}/poster`;
 
+/** The Anmeldetisch's form for adding a Registration; posting to it stores one. */
+export const addPath = (raceLink: string) => `${adminRacePath(raceLink)}/registrations/new`;
+
+/** The add form's hidden attempt ID, as an Admin opens the form now (none when it doesn't open). */
+export const addFormAttempt = async (raceLink: string) => (await (await asAdmin(addPath(raceLink))).text()).match(/name="attempt" value="([^"]+)"/)?.[1];
+
+/**
+ * Posts the add form as the browser does: unless `fields` say otherwise, with
+ * the attempt ID of the form as an Admin opens it now.
+ */
+export async function postAdd(raceLink: string, fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
+  const attempt = fields.attempt ?? (await addFormAttempt(raceLink));
+  return postForm(addPath(raceLink), attempt === undefined ? fields : { attempt, ...fields }, headers);
+}
+
 /** The admin page of a Registration's delete confirmation; posting to it deletes. */
 export const deletePath = (raceLink: string, number: number) => `${adminRacePath(raceLink)}/registrations/${number}/delete`;
 

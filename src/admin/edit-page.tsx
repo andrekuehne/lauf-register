@@ -1,8 +1,10 @@
 // The Admin's edit form for one Registration: its Registration number and every
 // other field, checked by the same rules as the public submit
 // (src/registration/registration-input.ts). A single stays a single and a Pair a Pair.
+// Its fields and checks also make up the Anmeldetisch's add form (add-page.tsx).
 
 import type { Context } from "hono";
+import type { Child } from "hono/jsx";
 import { DURATIONS, GENDERS, TITLES } from "../domain/categories";
 import { NUMBER_RANGES, numberInRange, seriesOf } from "../domain/numbers";
 import { birthYearError, MAX_TEXT_LENGTH } from "../domain/participant-checks";
@@ -16,20 +18,21 @@ import { BackTo, CancelTo, editPath, participantNames } from "./registrations-pa
 
 const t = strings("de").flow;
 
-/** For any choice left open (Duration, Gender, Title). */
-const PLEASE_CHOOSE = "Bitte wählen.";
+/** For any choice left open (Duration, Gender, Title, single or Pair). */
+export const PLEASE_CHOOSE = "Bitte wählen.";
 
 const PARTICIPANT_FIELDS = ["gender", "title", "firstName", "lastName", "birthYear", "club"] as const;
 type ParticipantField = (typeof PARTICIPANT_FIELDS)[number];
-type ParticipantValues = Record<ParticipantField, string>;
+/** One Participant's fields as text, exactly as shown or posted. */
+export type ParticipantValues = Record<ParticipantField, string>;
 
 /** The form as text, exactly as shown or posted: one Participant, or two for a Pair. */
 export type EditValues = { number: string; duration: string; participants: ParticipantValues[] };
 
 /** German messages by form field name ("number", "duration", "p1.lastName", …). */
-type EditErrors = Record<string, string>;
+export type EditErrors = Record<string, string>;
 
-const emptyParticipant = (): ParticipantValues => ({ gender: "", title: "none", firstName: "", lastName: "", birthYear: "", club: "" });
+export const emptyParticipant = (): ParticipantValues => ({ gender: "", title: "none", firstName: "", lastName: "", birthYear: "", club: "" });
 
 export function storedValues(registration: StoredRegistration): EditValues {
   const participants = registration.participants.map(
@@ -45,13 +48,18 @@ export function storedValues(registration: StoredRegistration): EditValues {
   return { number: String(registration.number), duration: String(registration.duration), participants };
 }
 
+/** A posted field's text; empty when it wasn't posted. */
+export const postedText = (form: Record<string, unknown>, name: string) => (typeof form[name] === "string" ? (form[name] as string) : "");
+
+/** Participant `n`'s fields (1 or 2) as posted. */
+export const postedParticipant = (form: Record<string, unknown>, n: number): ParticipantValues =>
+  Object.fromEntries(PARTICIPANT_FIELDS.map((field) => [field, postedText(form, `p${n}.${field}`)])) as ParticipantValues;
+
 export function postedValues(form: Record<string, unknown>): EditValues {
-  const text = (name: string) => (typeof form[name] === "string" ? (form[name] as string) : "");
-  const participant = (n: number): ParticipantValues =>
-    Object.fromEntries(PARTICIPANT_FIELDS.map((field) => [field, text(`p${n}.${field}`)])) as ParticipantValues;
   // Participant 2 only when the post has any field of it.
   const pair = Object.keys(form).some((name) => name.startsWith("p2."));
-  return { number: text("number"), duration: text("duration"), participants: pair ? [participant(1), participant(2)] : [participant(1)] };
+  const participants = pair ? [postedParticipant(form, 1), postedParticipant(form, 2)] : [postedParticipant(form, 1)];
+  return { number: postedText(form, "number"), duration: postedText(form, "duration"), participants };
 }
 
 export type CheckedEdit = { ok: true; number: number; content: RegistrationContent } | { ok: false; errors: EditErrors };
@@ -67,23 +75,32 @@ export function checkEdit(values: EditValues, registration: StoredRegistration, 
   if (seriesOf(values.participants) !== series) {
     return { ok: false, errors: { form: "Aus Einzeln wird kein Paar und umgekehrt. Dafür bitte die Anmeldung löschen und neu anmelden." } };
   }
+  const content = checkContent(values, year);
+  const errors: EditErrors = content.ok ? {} : content.errors;
+  const number = numberInRange(values.number, series);
+  if (number === null) {
+    const { from, to } = NUMBER_RANGES[series];
+    errors.number = `${SERIES_NAMES[series]} haben Startnummern von ${from} bis ${to}.`;
+  }
+  if (content.ok && number !== null) return { ok: true, number, content: content.content };
+  return { ok: false, errors };
+}
+
+/** A posted Duration and Participants, checked: the content to store, or a German message per field. */
+export type CheckedContent = { ok: true; content: RegistrationContent } | { ok: false; errors: EditErrors };
+
+/** Checks a posted Duration and Participants by the submit's rules. */
+export function checkContent(values: Pick<EditValues, "duration" | "participants">, year: number): CheckedContent {
   const body = {
     duration: /^\d+$/.test(values.duration) ? Number(values.duration) : values.duration,
     // As in the public flow: a four-digit year (spaces around don't matter) is a number, anything else a format error.
     participants: values.participants.map((p) => ({ ...p, birthYear: /^[1-9]\d{3}$/.test(p.birthYear.trim()) ? Number(p.birthYear.trim()) : p.birthYear })),
   };
   const result = validateRegistrationEdit(body, year);
+  if (result.ok) return { ok: true, content: result.content };
   const errors: EditErrors = {};
-  const number = numberInRange(values.number, series);
-  if (number === null) {
-    const { from, to } = NUMBER_RANGES[series];
-    errors.number = `${SERIES_NAMES[series]} haben Startnummern von ${from} bis ${to}.`;
-  }
-  if (!result.ok) {
-    for (const issue of result.issues) Object.assign(errors, germanError(issue, values, year));
-    if (Object.keys(errors).length === 0) errors.form = "Bitte die Angaben prüfen.";
-  }
-  if (result.ok && number !== null && Object.keys(errors).length === 0) return { ok: true, number, content: result.content };
+  for (const issue of result.issues) Object.assign(errors, germanError(issue, values, year));
+  if (Object.keys(errors).length === 0) errors.form = "Bitte die Angaben prüfen.";
   return { ok: false, errors };
 }
 
@@ -98,7 +115,7 @@ export const numberReservedError = (number: number): EditErrors => ({
 });
 
 /** The German message for one validation issue, keyed by the form field it belongs to. */
-function germanError(issue: RegistrationIssue, values: EditValues, year: number): EditErrors {
+function germanError(issue: RegistrationIssue, values: Pick<EditValues, "participants">, year: number): EditErrors {
   if (issue.path === "duration") return { duration: PLEASE_CHOOSE };
   const match = issue.path.match(/^participants\.(\d)\.(\w+)$/);
   if (!match) return {};
@@ -132,9 +149,22 @@ function Choice(props: { name: string; value: string; checked: boolean; label: s
   );
 }
 
-function FieldError(props: { errors: EditErrors; name: string }) {
+export function FieldError(props: { errors: EditErrors; name: string }) {
   const message = props.errors[props.name];
   return message ? <p class="error">{message}</p> : null;
+}
+
+/** The Duration's choices. */
+export function DurationField(props: { value: string; errors: EditErrors }) {
+  return (
+    <div class="field">
+      <span class="label">Dauer</span>
+      <div class="pills">
+        {DURATIONS.map((d) => <Choice name="duration" value={String(d)} checked={props.value === String(d)} label={t.durations[d].name} />)}
+      </div>
+      <FieldError errors={props.errors} name="duration" />
+    </div>
+  );
 }
 
 /** A text field; with `digits` (a year, a Registration number), a short numeric one of at most that many digits. */
@@ -159,12 +189,23 @@ function TextField(props: { name: string; label: string; value: string; errors: 
   );
 }
 
-function ParticipantFieldset(props: { n: number; pair: boolean; participant: ParticipantValues; errors: EditErrors }) {
+/**
+ * Participant `n`'s fields. Its legend says which of a Pair it is, or „Person“
+ * for a single; `legend` puts something else there, and `class` adds to the fieldset's classes.
+ */
+export function ParticipantFieldset(props: {
+  n: number;
+  pair: boolean;
+  participant: ParticipantValues;
+  errors: EditErrors;
+  legend?: Child;
+  class?: string;
+}) {
   const { n, participant, errors } = props;
   const name = (field: ParticipantField) => `p${n}.${field}`;
   return (
-    <fieldset class="card edit-participant">
-      <legend>{props.pair ? (n === 1 ? t.pairFirst : t.pairSecond) : "Person"}</legend>
+    <fieldset class={props.class ? `card edit-participant ${props.class}` : "card edit-participant"}>
+      <legend>{props.legend ?? (props.pair ? (n === 1 ? t.pairFirst : t.pairSecond) : "Person")}</legend>
       <div class="field">
         <span class="label">{t.gender}</span>
         <div class="pills">
@@ -208,13 +249,7 @@ export function editRegistrationPage(c: Context<AppEnv>, race: Race, registratio
         <RegistrationField registration={registration} />
         <div class="card">
           <TextField name="number" label="Startnummer" value={values.number} errors={errors} digits={4} />
-          <div class="field">
-            <span class="label">Dauer</span>
-            <div class="pills">
-              {DURATIONS.map((d) => <Choice name="duration" value={String(d)} checked={values.duration === String(d)} label={t.durations[d].name} />)}
-            </div>
-            <FieldError errors={errors} name="duration" />
-          </div>
+          <DurationField value={values.duration} errors={errors} />
         </div>
         {registration.participants.map((_, index) => (
           <ParticipantFieldset n={index + 1} pair={pair} participant={values.participants[index] ?? emptyParticipant()} errors={errors} />

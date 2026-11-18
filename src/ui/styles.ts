@@ -192,6 +192,17 @@ color:var(--muted);background:var(--card);border:2px solid var(--line);cursor:po
 .desk-counts th,.desk-counts td{padding:4px 6px;text-align:right;border-bottom:1px solid #e5e7eb}
 .desk-counts th[scope=row]{text-align:left;color:var(--c)}
 .desk-counts tfoot th,.desk-counts tfoot td{font-weight:700;border-bottom:0}
+.search-and-add{display:flex;flex-wrap:wrap;align-items:flex-end;margin:0 0 12px}
+.search-and-add .reg-search{flex:1 1 14rem;margin:0 12px 0 0}
+.search-and-add .search-add{width:auto;margin:8px 0 0;padding:12px 16px}
+.reg-none a{color:var(--accent)}
+.kind-choice{position:absolute;opacity:0;width:1px;height:1px}
+#kind-single:checked~.card label[for=kind-single] span,#kind-pair:checked~.card label[for=kind-pair] span{background:var(--fg);border-color:var(--fg);color:#fff}
+#kind-single:focus~.card label[for=kind-single] span,#kind-pair:focus~.card label[for=kind-pair] span{outline:3px solid #93c5fd}
+#kind-pair:not(:checked)~.if-pair,#kind-pair:not(:checked)~* .if-pair,#kind-pair:checked~* .if-single{display:none}
+.added h1{margin:4px 0 8px;font-size:1.5rem;line-height:1.2}
+.added-number{margin:0 .1em;font-size:3.5rem;line-height:1}
+.added-names{margin:0 0 6px;font-size:1.2rem;font-weight:700}
 .desk-row{transition:background-color 1.5s}
 .desk-row.desk-fresh{background-color:#fef3c7;transition:none}
 .desk-connection{margin:4px 0 0;font-size:.95rem}

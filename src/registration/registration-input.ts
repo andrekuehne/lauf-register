@@ -38,6 +38,12 @@ export type ContentValidation = { ok: true; content: RegistrationContent } | { o
 /** The browser sends 32 hex characters; anything similar is fine, markup and the like is not. */
 const ATTEMPT_ID = /^[A-Za-z0-9_-]{16,64}$/;
 
+/** Whether `value` is an attempt ID as the phone flow and the add form send it. */
+export const isAttemptId = (value: unknown): value is string => typeof value === "string" && ATTEMPT_ID.test(value);
+
+/** A new attempt ID: 32 hex characters, as the phone flow makes them. */
+export const newAttemptId = () => crypto.randomUUID().replace(/-/g, "");
+
 const BIRTH_YEAR_MESSAGES = {
   format: "birth year must be a four-digit number",
   "too-early": "birth year is too early",
@@ -53,7 +59,7 @@ export function validateRegistrationInput(body: unknown, raceYear: number): Regi
   const issue = (path: string, message: string) => issues.push({ path, message });
 
   const { attemptId, consent } = body;
-  if (typeof attemptId !== "string" || !ATTEMPT_ID.test(attemptId)) issue("attemptId", "attempt ID is missing or malformed");
+  if (!isAttemptId(attemptId)) issue("attemptId", "attempt ID is missing or malformed");
   if (consent !== true) issue("consent", "consent must be ticked");
   const content = checkContent(body, raceYear, issue);
 
