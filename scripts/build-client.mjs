@@ -1,7 +1,7 @@
 // Bundles the browser scripts (src/client/) for ~iOS 12 / Android 8 browsers
 // and writes each as a string module the Worker inlines into its pages:
 // the registration flow, the QR layer, the admin pages' confirmation dialogs, and
-// the search on a Race's admin page and its Anmeldetisch.
+// the search on a Race's admin page and its Anmeldetisch, and the Anmeldetisch's live updates.
 // Runs before `wrangler dev`/`deploy` (wrangler.jsonc build.command), tests and typecheck.
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -12,6 +12,7 @@ const BUNDLES = [
   { entry: "src/client/qr-layer.ts", out: "src/generated/qr-layer-bundle.ts", name: "qrLayerBundle" },
   { entry: "src/client/confirm.ts", out: "src/generated/confirm-bundle.ts", name: "confirmBundle" },
   { entry: "src/client/race-search.ts", out: "src/generated/race-search-bundle.ts", name: "raceSearchBundle" },
+  { entry: "src/client/desk-live.ts", out: "src/generated/desk-live-bundle.ts", name: "deskLiveBundle" },
 ];
 
 await mkdir("src/generated", { recursive: true });

@@ -21,7 +21,8 @@ export type StoredRegistration = {
   participants: ParticipantInput[];
 };
 
-export type SubmitResult = { answer: SubmitAnswer } | { closed: true } | { full: true };
+/** What the phone is answered, and the stored Registration's id; or why nothing was stored. */
+export type SubmitResult = { answer: SubmitAnswer; id: number } | { closed: true } | { full: true };
 
 /**
  * Stores a Registration and answers with it as stored, `closed` when
@@ -34,10 +35,10 @@ export type SubmitResult = { answer: SubmitAnswer } | { closed: true } | { full:
 export async function submitRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<SubmitResult> {
   for (let retry = 0; ; retry++) {
     const existing = await findByAttempt(db, raceId, input.attemptId);
-    if (existing) return { answer: answerFor(existing.number, existing, !sameContent(existing, input)) };
+    if (existing) return { answer: answerFor(existing.number, existing, !sameContent(existing, input)), id: existing.id };
     try {
-      const number = await insertRegistration(db, raceId, input);
-      if (number !== null) return { answer: answerFor(number, input, false) };
+      const stored = await insertRegistration(db, raceId, input);
+      if (stored !== null) return { answer: answerFor(stored.number, input, false), id: stored.id };
       const open = await db.prepare("SELECT registration_open FROM races WHERE id = ?").bind(raceId).first<number>("registration_open");
       return open === 1 ? { full: true } : { closed: true };
     } catch (error) {
@@ -331,9 +332,9 @@ function answerFor(number: number, stored: RegistrationContent, differs: boolean
  * number included. When there is no next number, nothing is stored.
  *
  * Every step only touches a Race whose Registration is open, so a Race closed
- * a moment ago stores nothing. Null when nothing was stored.
+ * a moment ago stores nothing. Its number and id; null when nothing was stored.
  */
-async function insertRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<number | null> {
+async function insertRegistration(db: D1Database, raceId: number, input: RegistrationInput): Promise<{ number: number; id: number } | null> {
   const series = seriesOf(input.participants);
   const lastColumn = lastNumberColumn(series);
   const nextNumber = nextNumberSql(series);
@@ -342,7 +343,7 @@ async function insertRegistration(db: D1Database, raceId: number, input: Registr
       `INSERT INTO registrations (race_id, number, duration, attempt_id)
        SELECT id, ${nextNumber}, ?, ? FROM races
        WHERE id = ? AND registration_open = 1 AND ${nextNumber} IS NOT NULL
-       RETURNING number`,
+       RETURNING number, id`,
     )
     .bind(input.duration, input.attemptId, raceId);
   const stored = "SELECT number FROM registrations WHERE race_id = ? AND attempt_id = ?";
@@ -350,6 +351,6 @@ async function insertRegistration(db: D1Database, raceId: number, input: Registr
     .prepare(`UPDATE races SET ${lastColumn} = (${stored}) WHERE id = ? AND EXISTS (${stored})`)
     .bind(raceId, input.attemptId, raceId, raceId, input.attemptId);
   const participants = insertParticipants(db, input.participants, "race_id = ? AND attempt_id = ?", [raceId, input.attemptId]);
-  const [inserted] = await db.batch<{ number: number }>([registration, lastHandedOut, ...participants]);
-  return inserted!.results[0]?.number ?? null;
+  const [inserted] = await db.batch<{ number: number; id: number }>([registration, lastHandedOut, ...participants]);
+  return inserted!.results[0] ?? null;
 }

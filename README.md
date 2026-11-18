@@ -18,7 +18,12 @@ What Admins do around a Race, in the order they need it. The main registration m
 ### During the Race
 
 - **Backup:** download the Excel export („Excel für RaceResult herunterladen“ on the Race page) every hour or so. It is the practical backup.
-- **Finding someone at the Race desk:** open the Anmeldetisch (Race page → „Anmeldetisch“) on the desk's tablet or laptop. Its field „Startnummer oder Name“ has the cursor as it opens and finds a Registration by its number, by a Previous number („vorher“ on its row), or by part of a name; Esc clears it. Newest Registrations come first. Beside the list: the toggle to close Registration, the numbers left per series, and the counts per Duration and Division. The list doesn't update itself: reload it for new Registrations. „Bearbeiten“ and „Löschen“ lead back to the Anmeldetisch. The Race page has the same search.
+- **Finding someone at the Race desk:** open the Anmeldetisch (Race page → „Anmeldetisch“) on the desk's tablet or laptop. Its field „Startnummer oder Name“ has the cursor as it opens and finds a Registration by its number, by a Previous number („vorher“ on its row), or by part of a name; Esc clears it. Newest Registrations come first. Beside the list: the toggle to close Registration, the numbers left per series, and the counts per Duration and Division. „Bearbeiten“ and „Löschen“ lead back to the Anmeldetisch. The Race page has the same search.
+- **The Anmeldetisch updates itself.** New Registrations from phones, edits, deletions, new numbers after reserving, and opening or closing Registration show up within seconds, without reloading ([ADR 0006](docs/adr/0006-live-updates-pushed-through-a-durable-object.md)). A new Registration appears only if it matches what is typed in the search; new and changed rows are highlighted for a few seconds, and the rows on screen don't jump. The line under the heading says how it is connected:
+  - „Live“: changes come in as they happen.
+  - „Getrennt – verbinde neu …“: the connection dropped (Wi-Fi, the tablet slept, a deploy). It reconnects by itself and then loads the whole list again; nothing to do.
+  - „Getrennt – Anmeldung abgelaufen. Bitte die Seite neu laden.“: the Admin sign-in has run out. Reload the page and sign in again.
+- **No deploys on race day.** A deploy cuts every Anmeldetisch's connection; they reconnect, but nothing should change while the Race runs. Hold back pushes to `main`, as each one deploys (see [CI/CD](#cicd)).
 - **A lost bib:** reserve its number on the settings page. If a Registration has it, the page asks first, then gives that Registration a new number from its series' count, as if it registered now, and lists the new numbers to hand out at the Race desk. Its card keeps the old one as a Previous number („vorher“).
 - **Few numbers left:** below 20 free numbers in a series, the Race page and the Anmeldetisch say how many are left.
 
@@ -90,12 +95,14 @@ One-time setup in the Cloudflare dashboard:
 4. Open the application again → **Additional settings** → copy the **Application Audience (AUD) Tag**.
 5. Put it into `wrangler.jsonc` → `vars.ACCESS_AUD` and deploy (`npm run deploy`).
 6. Check in a private browser window: `/admin` asks for an email and code; a Race link `/r/…` opens without sign-in.
+7. Signed in, open a Race's Anmeldetisch: the line under its heading says „Live“, so its WebSocket (`/admin/races/…/desk/live`) passes Access with the sign-in cookie.
+8. Before the first race day, on the desk's tablet: leave the Anmeldetisch open for an hour, put the tablet to sleep, register on a phone, wake the tablet. Within seconds it says „Live“ again and lists the new Registration.
 
 **Adding or removing an Admin:** edit the policy's email list in Zero Trust. Nothing to change in the app.
 
 ## End-to-end tests
 
-`e2e/` drives the registration flow the way a Participant does, with Playwright in WebKit (stand-in for iPhone Safari) and Chromium, each at 390 px and 320 px phone width with touch. The Anmeldetisch's tests (`e2e/desk.e2e.ts`) also run on the Race desk's devices: a tablet in portrait (768 px) and landscape (1024 px) and a laptop (1280 px), in both browsers; the phone tests don't. Every test creates its own Race through the admin pages, then registers through the public link and checks the result in the Admin's list. Tests about what happens after registering (e.g. the search on the Race page) register faster by posting straight to the endpoint the flow posts to (`registerDirectly` in `e2e/helpers.ts`).
+`e2e/` drives the registration flow the way a Participant does, with Playwright in WebKit (stand-in for iPhone Safari) and Chromium, each at 390 px and 320 px phone width with touch. The Anmeldetisch's tests (`e2e/desk.e2e.ts`) also run on the Race desk's devices: a tablet in portrait (768 px) and landscape (1024 px) and a laptop (1280 px), in both browsers; the phone tests don't. Its live-update tests register on a phone in a second browser context and watch the Anmeldetisch change without a reload. Every test creates its own Race through the admin pages, then registers through the public link and checks the result in the Admin's list. Tests about what happens after registering (e.g. the search on the Race page) register faster by posting straight to the endpoint the flow posts to (`registerDirectly` in `e2e/helpers.ts`).
 
 `npm run test:e2e` starts its own `wrangler dev` on port 8791 with a fresh local database in `.wrangler/e2e-state` (all migrations applied), separate from the `npm run dev` one. The admin sign-in is the local Access stand-in from `wrangler.jsonc` (`access.dev`), the same as for `npm run dev`; nothing in the app is faked.
 
@@ -103,7 +110,7 @@ First time only, download the two browsers: `npx playwright install webkit chrom
 
 ## Browser code
 
-The browser scripts live in `src/client/`: the registration flow (`flow.ts`), the QR layer (`qr-layer.ts`), the admin pages' confirmation dialogs (`confirm.ts`) and the search on a Race's admin page and its Anmeldetisch (`race-search.ts`). `scripts/build-client.mjs` bundles them for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
+The browser scripts live in `src/client/`: the registration flow (`flow.ts`), the QR layer (`qr-layer.ts`), the admin pages' confirmation dialogs (`confirm.ts`), the search on a Race's admin page and its Anmeldetisch (`race-search.ts`), and the Anmeldetisch's live updates (`desk-live.ts`). `scripts/build-client.mjs` bundles them for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
 
 ## Data deletion
 

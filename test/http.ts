@@ -12,6 +12,8 @@ import { countingRowsRead } from "./d1-rows";
 // it's anonymous. The clock stands still at TODAY unless a test moves it (atClock).
 // Besides them, rowsReadByAdmin and rowsReadBySubmit count the rows the database
 // reads: a meter on the real database (test/d1-rows.ts), not a stand-in for it.
+// submitWhileDeskUnreachable cuts the Anmeldetisch's Durable Object off, as an
+// outage would: a fault on a real binding, not a stand-in for the app's code.
 const testIdentity: AdminIdentity = async (c) => c.req.header("x-test-admin") ?? null;
 const TEST_NOW = new Date("2025-11-01T10:00:00Z"); // 11:00 in Berlin
 /** The tests' today (2025-11-01) in the organizers' time zone: Races dated before it are in the past. */
@@ -189,6 +191,17 @@ export async function publicLinks(): Promise<string[]> {
   const html = await (await asAdmin("/admin")).text();
   return [...html.matchAll(/href="(\/r\/[^"]+)"/g)].map((m) => m[1]!);
 }
+
+/** A Durable Object binding that can't be reached, as in an outage. */
+const unreachable = new Proxy(env.DESK_SCREENS, {
+  get: () => () => {
+    throw new Error("Durable Object unreachable");
+  },
+});
+
+/** Submits a Registration through the public link while the Anmeldetisch's Durable Object can't be reached. */
+export const submitWhileDeskUnreachable = (raceLink: string, body: unknown) =>
+  fetchWith({ ...env, DESK_SCREENS: unreachable }, registrationsPath(raceLink), submission(body));
 
 /** Submits a Registration through the public link, as the browser flow does. */
 export const submit = (raceLink: string, body: unknown) => request(registrationsPath(raceLink), submission(body));

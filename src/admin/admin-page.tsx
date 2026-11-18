@@ -60,6 +60,3 @@ export const openedFrom = (c: Context<AppEnv>): RacePage => racePageFrom(c.req.q
 
 /** Series as the admin pages' notices name them. */
 export const SERIES_NAMES: Record<SingleOrPair, string> = { single: "Einzelne", pair: "Paare" };
-
-/** "1 Anmeldung", "12 Anmeldungen" */
-export const registrationCount = (count: number) => `${count} ${count === 1 ? "Anmeldung" : "Anmeldungen"}`;

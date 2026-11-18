@@ -6,7 +6,7 @@ import { SINGLE_OR_PAIR, type SingleOrPair } from "../domain/categories";
 import { formatNumbers } from "../domain/reserved-numbers";
 import type { Race } from "../races/races";
 import type { NextNumbers } from "../registration/next-numbers";
-import type { NextAndReserved } from "../registration/reserved-numbers";
+import { nextAndReservedNumbers, type NextAndReserved } from "../registration/reserved-numbers";
 import { SERIES_NAMES, type RacePage } from "./admin-page";
 
 /**
@@ -19,6 +19,17 @@ export type ToggleState = { registrationOpen: true } | { registrationOpen: false
 
 /** A Race with what its toggle needs. */
 export type RaceWithToggle = Race & ToggleState;
+
+/**
+ * `race` with what its toggle needs: the Next and Reserved numbers are worked
+ * out only while Registration is closed (see ToggleState). Null when the Race
+ * was deleted in the meantime.
+ */
+export async function withToggleState<R extends Race>(db: D1Database, race: R): Promise<(R & ToggleState) | null> {
+  if (race.registrationOpen) return { ...race, registrationOpen: true };
+  const numbers = await nextAndReservedNumbers(db, race.id);
+  return numbers && { ...race, registrationOpen: false, numbers };
+}
 
 /** „Einzelne 181“, or „Einzelne: keine mehr frei“ when the series has no number left. */
 const nextOf = (next: NextNumbers, series: SingleOrPair) => {

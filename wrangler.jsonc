@@ -32,5 +32,11 @@
       "database_id": "ab1e9984-f1c1-4485-8696-9e343f91b193",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  // One per Race: holds the WebSockets of its Anmeldetisch screens and pushes changes to them (docs/adr/0006).
+  "durable_objects": {
+    "bindings": [{ "name": "DESK_SCREENS", "class_name": "DeskScreens" }]
+  },
+  // SQLite-backed, as the Workers Free plan requires.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DeskScreens"] }]
 }

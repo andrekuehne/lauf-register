@@ -2,8 +2,8 @@
 // laptop. Runs in the phone projects and in the tablet and laptop ones
 // (playwright.config.ts).
 
-import { expect, test, type Page } from "@playwright/test";
-import { deskPath, newRace, registerDirectly } from "./helpers";
+import { expect, test, type Browser, type Page } from "@playwright/test";
+import { consentAndSubmit, deskPath, newRace, registerDirectly, startRegistration, tapNext } from "./helpers";
 
 const search = (page: Page) => page.getByLabel("Startnummer oder Name");
 /** The numbers of the Registrations the list shows, in order. */
@@ -91,4 +91,50 @@ test("nothing scrolls sideways, with long names, a Pair and a series without num
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
   expect(overflow).toBe(0);
+});
+
+test.describe("the Anmeldetisch updates itself", () => {
+  /** The connection's status line. */
+  const connection = (page: Page) => page.getByRole("status").filter({ hasText: /Live|Getrennt|Verbinde/ });
+
+  /** Registers Anna as a single in the Stundenlauf on a phone of its own (a second browser context), through the whole flow. */
+  async function registerOnAPhone(browser: Browser, raceLink: string): Promise<string> {
+    const phone = await browser.newContext({ viewport: { width: 390, height: 740 }, hasTouch: true });
+    try {
+      const page = await phone.newPage();
+      await startRegistration(page, raceLink, ["Stundenlauf", "Einzeln", "Frau"], { firstName: "Anna", lastName: "Neumann", birthYear: "1985" });
+      await tapNext(page);
+      return await consentAndSubmit(page);
+    } finally {
+      await phone.close();
+    }
+  }
+
+  test("a Registration made on a phone shows up without a reload, highlighted; the status says Live", async ({ page, browser }) => {
+    const link = await deskWithRegistrations(page);
+    await expect(connection(page)).toHaveText("Live");
+    // Gone if the page were loaded again.
+    await page.evaluate(() => document.body.setAttribute("data-not-reloaded", ""));
+
+    const number = await registerOnAPhone(browser, link);
+
+    await expect(shownNumbers(page)).toHaveText([number, "2", "1001", "1"]);
+    await expect(page.locator(`li[data-registration="${number}"]`)).toHaveClass(/desk-fresh/);
+    await expect(page.getByText("4 Anmeldungen")).toBeVisible();
+    await expect(page.locator("body[data-not-reloaded]")).toHaveCount(1);
+  });
+
+  test("a Registration made on a phone stays out of view while the search doesn't match it", async ({ page, browser }) => {
+    const link = await deskWithRegistrations(page);
+    await expect(connection(page)).toHaveText("Live");
+    await search(page).fill("Klein");
+    await expect(shownNumbers(page)).toHaveText(["2"]);
+
+    const number = await registerOnAPhone(browser, link);
+
+    await expect(page.getByText("4 Anmeldungen")).toBeVisible();
+    await expect(shownNumbers(page)).toHaveText(["2"]);
+    await search(page).fill("Neumann");
+    await expect(shownNumbers(page)).toHaveText([number]);
+  });
 });

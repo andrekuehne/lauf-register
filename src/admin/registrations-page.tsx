@@ -11,11 +11,12 @@ import type { Race } from "../races/races";
 import { duplicatesOf } from "../registration/duplicates";
 import { divisionOfRegistration, type ParticipantInput } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
+import { registrationCount } from "../shared/registration-count";
 import { SEARCH_ATTRIBUTES, SEARCH_FIELD_ID, searchKeys } from "../shared/registration-search";
 import { divisionIconSvg } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
 import { QrButton, QrLayers } from "../ui/qr-layer";
-import { AdminPage, openedFrom, registrationCount, RegistrationField, SERIES_NAMES, type RacePage } from "./admin-page";
+import { AdminPage, openedFrom, RegistrationField, SERIES_NAMES, type RacePage } from "./admin-page";
 import { RegistrationToggle, type RaceWithToggle } from "./registration-toggle";
 
 const t = strings("de").flow;
@@ -28,6 +29,8 @@ export const posterPath = (race: Race) => `${racePath(race)}/poster`;
 export const settingsPath = (race: Race) => `${racePath(race)}/settings`;
 /** The Anmeldetisch: the Race desk's screen for finding Registrations. */
 export const deskPath = (race: Race) => `${racePath(race)}/desk`;
+/** Where the Anmeldetisch's screen connects to for its live updates (a WebSocket). */
+export const deskLivePath = (race: Race) => `${deskPath(race)}/live`;
 /** Each of the Race's own pages: where it is, and what the way back to it is called. */
 const RACE_PAGES: Record<RacePage, { path: (race: Race) => string; name: (race: Race) => string }> = {
   race: { path: racePath, name: (race) => race.name },

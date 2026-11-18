@@ -30,9 +30,11 @@ import {
 } from "../registration/registrations";
 import { numbersLeft, setNextNumbers } from "../registration/next-numbers";
 import { nextAndReservedNumbers, removeReservedNumbers, reserveNumbers } from "../registration/reserved-numbers";
+import { registrationCount } from "../shared/registration-count";
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
-import { AdminPage, openedFrom, problemPage, racePageFrom, REGISTRATION_FIELD, registrationCount, type RacePage } from "./admin-page";
+import { AdminPage, openedFrom, problemPage, racePageFrom, REGISTRATION_FIELD, type RacePage } from "./admin-page";
+import { connectDesk, notifyDesk } from "./desk-live";
 import { deskPage } from "./desk-page";
 import { checkEdit, editHeading, editRegistrationPage, numberReservedError, numberTakenError, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
@@ -46,7 +48,7 @@ import {
   type NextNumbersSectionState,
   type ReservedSectionState,
 } from "./race-settings-page";
-import { RegistrationToggle, type RaceWithToggle, type ToggleState } from "./registration-toggle";
+import { RegistrationToggle, withToggleState, type RaceWithToggle, type ToggleState } from "./registration-toggle";
 import {
   deleteRacePage,
   deleteRegistrationPage,
@@ -125,17 +127,6 @@ async function racesPage(c: Context<AppEnv>, form?: { values: NewRaceFormValues;
 async function raceCards(db: D1Database): Promise<RaceCard[]> {
   const cards = await Promise.all((await listRaces(db)).map((race) => withToggleState(db, race)));
   return cards.filter((card) => card !== null);
-}
-
-/**
- * `race` with what its toggle needs: the Next and Reserved numbers are worked
- * out only while Registration is closed (see ToggleState). Null when the Race
- * was deleted in the meantime.
- */
-async function withToggleState<R extends Race>(db: D1Database, race: R): Promise<(R & ToggleState) | null> {
-  if (race.registrationOpen) return { ...race, registrationOpen: true };
-  const numbers = await nextAndReservedNumbers(db, race.id);
-  return numbers && { ...race, registrationOpen: false, numbers };
 }
 
 const RACE_NOT_FOUND = "Diesen Lauf gibt es nicht (mehr).";
@@ -296,6 +287,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
       // Deleted by another Admin in the meantime.
       const found = await setRegistrationOpen(c.env.DB, race.token, open === "1");
       if (!found) return problemPage(c, RACE_NOT_FOUND, 404);
+      notifyDesk(c, race.token);
       // Back to the page the toggle was on.
       const back = racePageFrom(from);
       return c.redirect(back ? racePagePath(race, back) : "/admin", 303);
@@ -305,6 +297,8 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
   admin.get("/races/:token", (c) => withRaceRegistrations(c, raceRegistrationsPage));
 
   admin.get("/races/:token/desk", (c) => withRaceRegistrations(c, deskPage));
+
+  admin.get("/races/:token/desk/live", (c) => withRace(c, async (race) => connectDesk(c, race)));
 
   admin.get("/races/:token/settings", (c) => withRace(c, async (race) => settingsPage(c, race)));
 
@@ -329,6 +323,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
       const result = await setNextNumbers(c.env.DB, race.id, checked.changed, posted.confirmed);
       if ("toConfirm" in result) return settingsPage(c, race, { next: { ...asPosted, toConfirm: result.toConfirm } });
       if (!result.saved) return problemPage(c, RACE_NOT_FOUND, 404);
+      notifyDesk(c, race.token);
       return c.redirect(nextNumbersSectionPath(race), 303);
     }),
   );
@@ -343,6 +338,8 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
       const result = await reserveNumbers(c.env.DB, race.id, parsed, confirmedRegistrations(confirmed));
       if ("toConfirm" in result) return settingsPage(c, race, { reserved: { typed, toConfirm: result.toConfirm } });
       if ("noNumberLeft" in result) return settingsPage(c, race, { reserved: { typed, error: NO_NUMBER_LEFT } });
+      // The numbers left change, and the moved Registrations' numbers.
+      notifyDesk(c, race.token, { changed: result.moves.map((move) => move.registration.id) });
       if (result.moves.length === 0) return c.redirect(reservedSectionPath(race), 303);
       // Shown right away rather than after a redirect: the desk needs these lines to hand out the new bibs.
       return settingsPage(c, race, { reserved: { moves: result.moves } });
@@ -356,6 +353,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
       const to = wholeNumber(body.to);
       if (from === null || to === null) return problemPage(c, "Ungültige Anfrage.", 400);
       await removeReservedNumbers(c.env.DB, race.id, { from, to });
+      notifyDesk(c, race.token);
       return c.redirect(reservedSectionPath(race), 303);
     }),
   );
@@ -407,6 +405,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
         return editRegistrationPage(c, race, registration, values, numberTakenError(checked.number, other));
       }
       if (result === "number reserved") return editRegistrationPage(c, race, registration, values, numberReservedError(checked.number));
+      notifyDesk(c, race.token, { changed: [registration.id] });
       return c.redirect(racePagePath(race, openedFrom(c)), 303);
     }),
   );
@@ -419,6 +418,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
     withPostedForm(c, DELETE_PAGE, async (race, registration) => {
       // Deleted by another Admin in the meantime: say so.
       if (!(await deleteRegistration(c.env.DB, race.id, registration.id))) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
+      notifyDesk(c, race.token, { deleted: [registration.id] });
       return c.redirect(racePagePath(race, openedFrom(c)), 303);
     }),
   );

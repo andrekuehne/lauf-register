@@ -1,0 +1,12 @@
+# Live updates are pushed through a Durable Object, not polled
+
+The Anmeldetisch shows every change to its Race's Registrations within seconds, without being reloaded. Polling would have been the simplest way to do that, but a screen load reads about every Registration and Participant of the Race: some 1,000 rows at 400 Registrations. Reloading that every 10 seconds on 3 devices for 8 hours reads 5–6 million rows, over the Workers Free plan's 5 million a day. So changes are pushed instead. One Durable Object per Race (`DeskScreens`, named by the Race's token) holds the WebSockets of its Anmeldetisch screens, and every write that changes what they show tells it, once the write has succeeded: what changed, rendered as the screen shows it, and the side column's status with the numbers left. SQLite-backed Durable Objects are on the Free plan. With the Hibernation WebSocket API an idle connection costs no duration, the screens' keep-alive pings are answered without waking the object, and messages sent out to browsers are free. A race day needs about 500 notifications and a few dozen connects, well within the plan's 100,000 requests a day.
+
+Notifications are best effort. One that fails never fails the write: it is sent after the answer, and its errors are only logged. A screen reloads the whole list whenever it connects or reconnects, so whatever it missed while it was disconnected, or because a notification failed, is caught up then. That includes the first connect, right after the page itself loaded: a change made in between would otherwise be missing until the next reconnect. Each opened Anmeldetisch therefore reads its list twice, a few dozen times a day.
+
+## Consequences
+
+- A deploy cuts every connection. The screens reconnect by themselves within seconds, but there are no deploys on race day.
+- The WebSocket endpoint lives under `/admin`, behind Cloudflare Access, and checks the identity like every admin route. Once the Access session has run out, reconnecting fails, and the screen says to reload the page, which leads to the sign-in.
+- Tests check that a failing notification never fails the write by cutting off the Durable Object binding, the one test double besides those of [ADR 0002](0002-cloudflare-access-for-admin-login.md).
+- Two writes to the same Registration within moments of each other can reach a screen in the other order. It then shows the older state until it next reconnects; reloading the page shows the stored one.

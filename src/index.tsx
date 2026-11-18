@@ -2,6 +2,9 @@ import { cloudflareAccessIdentity } from "./admin/identity";
 import { createApp } from "./app";
 import { deleteExpiredRaces } from "./races/cleanup";
 
+// The Durable Object behind the Anmeldetisch's live updates (wrangler.jsonc).
+export { DeskScreens } from "./live/desk-screens";
+
 const app = createApp({ identity: cloudflareAccessIdentity, now: () => new Date() });
 
 export default {

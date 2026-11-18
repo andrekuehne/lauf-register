@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AdminIdentity } from "./admin/identity";
+import { notifyDesk } from "./admin/desk-live";
 import { adminRoutes } from "./admin/routes";
 import { strings } from "./i18n";
 import { language, type AppEnv } from "./language";
@@ -53,6 +54,7 @@ export function createApp(deps: { identity: AdminIdentity; now: () => Date }) {
     if ("closed" in submitted) return c.json({ error: SUBMIT_ERRORS.closed }, 409);
     // No number left for singles or Pairs: the flow shows a message of its own, sending them to the Race desk.
     if ("full" in submitted) return c.json({ error: SUBMIT_ERRORS.full }, 409);
+    notifyDesk(c, race.token, { changed: [submitted.id] });
     return c.json(submitted.answer);
   });
 
