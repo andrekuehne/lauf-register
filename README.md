@@ -18,13 +18,13 @@ What Admins do around a Race, in the order they need it. The main registration m
 ### During the Race
 
 - **Backup:** download the Excel export („Excel für RaceResult herunterladen“ on the Race page) every hour or so. It is the practical backup.
-- **Finding someone at the Race desk:** the search field „Startnummer oder Name“ on the Race page finds a Registration by its number, by a Previous number („vorher“ on its card), or by part of a name. The list doesn't update itself: reload the page for new Registrations.
+- **Finding someone at the Race desk:** open the Anmeldetisch (Race page → „Anmeldetisch“) on the desk's tablet or laptop. Its field „Startnummer oder Name“ has the cursor as it opens and finds a Registration by its number, by a Previous number („vorher“ on its row), or by part of a name; Esc clears it. Newest Registrations come first. Beside the list: the toggle to close Registration, the numbers left per series, and the counts per Duration and Division. The list doesn't update itself: reload it for new Registrations. „Bearbeiten“ and „Löschen“ lead back to the Anmeldetisch. The Race page has the same search.
 - **A lost bib:** reserve its number on the settings page. If a Registration has it, the page asks first, then gives that Registration a new number from its series' count, as if it registered now, and lists the new numbers to hand out at the Race desk. Its card keeps the old one as a Previous number („vorher“).
-- **Few numbers left:** below 20 free numbers in a series, the Race page says how many are left.
+- **Few numbers left:** below 20 free numbers in a series, the Race page and the Anmeldetisch say how many are left.
 
 ### When something goes wrong
 
-- **A series has no numbers left.** New Registrations of that series are refused: a phone says so when the person submits and sends them to the Race desk, and the Race page shows it with a link „Nächste Startnummer setzen“. There, under „Nächste Startnummern“, set where that series' count continues, then „Übernehmen“. Going back over numbers that are free now asks first and lists them: most belonged to a deleted Registration, whose bib may still be out. Reserve those whose bib is out, then confirm („Trotzdem übernehmen“).
+- **A series has no numbers left.** New Registrations of that series are refused: a phone says so when the person submits and sends them to the Race desk, and the Race page and the Anmeldetisch show it with a link „Nächste Startnummer setzen“. There, under „Nächste Startnummern“, set where that series' count continues, then „Übernehmen“. Going back over numbers that are free now asks first and lists them: most belonged to a deleted Registration, whose bib may still be out. Reserve those whose bib is out, then confirm („Trotzdem übernehmen“).
 - **A Race or Registrations deleted by mistake.** D1 Time Travel puts the whole database back to a moment before the mistake; everything stored after that moment is lost, in every Race. From the project folder, signed in with `npx wrangler login`:
   1. Save the current state first, outside the project folder: `npx wrangler d1 export lauf-register --remote --output=../before-restore.sql`, and download the Excel export of every Race still running. Registrations made after the restore point have to be entered again from these. Both hold Participants' personal data: delete them once they are no longer needed.
   2. Check the moment: `npx wrangler d1 time-travel info lauf-register --timestamp=2026-12-09T10:41:00+01:00` (German time in winter is `+01:00`).
@@ -95,7 +95,7 @@ One-time setup in the Cloudflare dashboard:
 
 ## End-to-end tests
 
-`e2e/` drives the registration flow the way a Participant does, with Playwright in WebKit (stand-in for iPhone Safari) and Chromium, each at 390 px and 320 px phone width with touch. Every test creates its own Race through the admin pages, then registers through the public link and checks the result in the Admin's list. Tests about what happens after registering (e.g. the search on the Race page) register faster by posting straight to the endpoint the flow posts to (`registerDirectly` in `e2e/helpers.ts`).
+`e2e/` drives the registration flow the way a Participant does, with Playwright in WebKit (stand-in for iPhone Safari) and Chromium, each at 390 px and 320 px phone width with touch. The Anmeldetisch's tests (`e2e/desk.e2e.ts`) also run on the Race desk's devices: a tablet in portrait (768 px) and landscape (1024 px) and a laptop (1280 px), in both browsers; the phone tests don't. Every test creates its own Race through the admin pages, then registers through the public link and checks the result in the Admin's list. Tests about what happens after registering (e.g. the search on the Race page) register faster by posting straight to the endpoint the flow posts to (`registerDirectly` in `e2e/helpers.ts`).
 
 `npm run test:e2e` starts its own `wrangler dev` on port 8791 with a fresh local database in `.wrangler/e2e-state` (all migrations applied), separate from the `npm run dev` one. The admin sign-in is the local Access stand-in from `wrangler.jsonc` (`access.dev`), the same as for `npm run dev`; nothing in the app is faked.
 
@@ -103,7 +103,7 @@ First time only, download the two browsers: `npx playwright install webkit chrom
 
 ## Browser code
 
-The browser scripts live in `src/client/`: the registration flow (`flow.ts`), the QR layer (`qr-layer.ts`), the admin pages' confirmation dialogs (`confirm.ts`) and the search on a Race's admin page (`race-search.ts`). `scripts/build-client.mjs` bundles them for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
+The browser scripts live in `src/client/`: the registration flow (`flow.ts`), the QR layer (`qr-layer.ts`), the admin pages' confirmation dialogs (`confirm.ts`) and the search on a Race's admin page and its Anmeldetisch (`race-search.ts`). `scripts/build-client.mjs` bundles them for older phones (~iOS 12 / Android 8) into `src/generated/` (git-ignored), which the Worker inlines into the page. `npm run dev`, `npm run deploy`, `npm test` and `npm run typecheck` run that build automatically.
 
 ## Data deletion
 

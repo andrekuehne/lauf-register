@@ -15,7 +15,7 @@ import { SEARCH_ATTRIBUTES, SEARCH_FIELD_ID, searchKeys } from "../shared/regist
 import { divisionIconSvg } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
 import { QrButton, QrLayers } from "../ui/qr-layer";
-import { AdminPage, registrationCount, RegistrationField, SERIES_NAMES } from "./admin-page";
+import { AdminPage, openedFrom, registrationCount, RegistrationField, SERIES_NAMES, type RacePage } from "./admin-page";
 import { RegistrationToggle, type RaceWithToggle } from "./registration-toggle";
 
 const t = strings("de").flow;
@@ -26,16 +26,42 @@ export const deleteRacePath = (race: Race) => `${racePath(race)}/delete`;
 const exportPath = (race: Race) => `${racePath(race)}/export.xlsx`;
 export const posterPath = (race: Race) => `${racePath(race)}/poster`;
 export const settingsPath = (race: Race) => `${racePath(race)}/settings`;
+/** The Anmeldetisch: the Race desk's screen for finding Registrations. */
+export const deskPath = (race: Race) => `${racePath(race)}/desk`;
+/** Each of the Race's own pages: where it is, and what the way back to it is called. */
+const RACE_PAGES: Record<RacePage, { path: (race: Race) => string; name: (race: Race) => string }> = {
+  race: { path: racePath, name: (race) => race.name },
+  desk: { path: deskPath, name: () => "Anmeldetisch" },
+};
+/** Where one of the Race's own pages is. */
+export const racePagePath = (race: Race, page: RacePage) => RACE_PAGES[page].path(race);
 /** The settings page opened at the Next numbers section. */
 export const nextNumbersSectionPath = (race: Race) => `${settingsPath(race)}#next`;
 
-/** Below this many numbers left in a series, the Race page warns: with 1–10 registering at once, a few minutes' notice. */
+/** Below this many numbers left in a series, the Race page and the Anmeldetisch warn: with 1–10 registering at once, a few minutes' notice. */
 const FEW_NUMBERS_LEFT = 20;
-export const editPath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/edit`;
-export const deleteRegistrationPath = (race: Race, registration: StoredRegistration) => `${racePath(race)}/registrations/${registration.number}/delete`;
+/**
+ * A Registration's edit page or delete confirmation, opened `from` one of the
+ * Race's own pages so that it leads back there (to the Race page unless it says otherwise).
+ */
+const registrationPagePath = (race: Race, registration: StoredRegistration, kind: "edit" | "delete", from: RacePage) =>
+  `${racePath(race)}/registrations/${registration.number}/${kind}${from === "race" ? "" : `?from=${from}`}`;
+export const editPath = (race: Race, registration: StoredRegistration, from: RacePage = "race") => registrationPagePath(race, registration, "edit", from);
+export const deleteRegistrationPath = (race: Race, registration: StoredRegistration, from: RacePage = "race") =>
+  registrationPagePath(race, registration, "delete", from);
 
-/** The Race page lists the hour first; Divisions in their usual order (women first, singles before Pairs). */
-const DURATION_ORDER: readonly Duration[] = [60, 30];
+/** The way back from a page opened from one of the Race's own pages: „← Nikolauslauf“ or „← Anmeldetisch“. */
+export const BackTo = (props: { race: Race; page: RacePage }) => (
+  <p><a href={racePagePath(props.race, props.page)}>← {RACE_PAGES[props.page].name(props.race)}</a></p>
+);
+
+/** „Abbrechen“ on a page opened from one of the Race's own pages: back there. */
+export const CancelTo = (props: { race: Race; page: RacePage }) => (
+  <p class="cancel"><a href={racePagePath(props.race, props.page)}>Abbrechen</a></p>
+);
+
+/** The Race page and the Anmeldetisch list the hour first; Divisions in their usual order (women first, singles before Pairs). */
+export const DURATION_ORDER: readonly Duration[] = [60, 30];
 
 /** „Dr. Anna Muster“ */
 export function fullName(p: ParticipantInput): string {
@@ -45,10 +71,21 @@ export function fullName(p: ParticipantInput): string {
 /** „Erika Muster“, or „Anna Muster und Ben Beispiel“ for a Pair. */
 export const participantNames = (registration: StoredRegistration) => registration.participants.map(fullName).join(" und ");
 
-/** The card attributes the Race page's search finds a Registration by. */
-function searchAttributes(registration: StoredRegistration) {
+/** The card attributes the search finds a Registration by (on the Race page and the Anmeldetisch). */
+export function searchAttributes(registration: StoredRegistration) {
   const keys = searchKeys([registration.number, ...registration.previousNumbers], registration.participants);
   return { [SEARCH_ATTRIBUTES.numbers]: keys.numbers, [SEARCH_ATTRIBUTES.names]: keys.names };
+}
+
+/** A Registration's Category in its colour, with the icon of its Division: „Frauen · Stundenlauf“. */
+export function CategoryLabel(props: { registration: StoredRegistration }) {
+  const division = divisionOfRegistration(props.registration);
+  return (
+    <span class="reg-cat">
+      <Icon svg={divisionIconSvg(division)} />
+      <span>{`${t.divisions[division].category} · ${t.durations[props.registration.duration].name}`}</span>
+    </span>
+  );
 }
 
 /** One Registration: number, Category in its colour, time, and each Participant with any duplicate flag. */
@@ -64,10 +101,7 @@ function RegistrationCard(props: {
     <li class={`card reg div-${division}`} data-registration={registration.number} {...searchAttributes(registration)}>
       <div class="reg-head">
         <b class="reg-no">{registration.number}</b>
-        <span class="reg-cat">
-          <Icon svg={divisionIconSvg(division)} />
-          <span>{`${t.divisions[division].category} · ${t.durations[registration.duration].name}`}</span>
-        </span>
+        <CategoryLabel registration={registration} />
         <span class="muted reg-time">{formatRegistrationTime(registration.createdAt, race.date)}</span>
       </div>
       {/* The confirmation screen may still show an old number: the desk finds it here. */}
@@ -96,22 +130,32 @@ function RegistrationCard(props: {
   );
 }
 
+/** Whether a series with this many numbers left is worth a warning. */
+export const fewNumbersLeft = (left: number) => left < FEW_NUMBERS_LEFT;
+
+/** „Einzelne: noch 12 Startnummern frei.“, or that none is left, with the way to set where the series continues. */
+export function NumbersLeft(props: { race: Race; series: SingleOrPair; left: number }) {
+  const { series, left } = props;
+  if (left > 0) return <>{`${SERIES_NAMES[series]}: noch ${left} ${left === 1 ? "Startnummer" : "Startnummern"} frei.`}</>;
+  return (
+    <>
+      {`${SERIES_NAMES[series]}: keine Startnummer mehr frei. Neue Anmeldungen werden abgelehnt. `}
+      <a href={nextNumbersSectionPath(props.race)}>Nächste Startnummer setzen</a>
+    </>
+  );
+}
+
 /** A warning for each series with few or no numbers left; nothing while both have plenty. */
 function NumbersLeftNotice(props: { race: Race; left: Record<SingleOrPair, number> }) {
-  const low = SINGLE_OR_PAIR.filter((series) => props.left[series] < FEW_NUMBERS_LEFT);
+  const low = SINGLE_OR_PAIR.filter((series) => fewNumbersLeft(props.left[series]));
   if (low.length === 0) return null;
   return (
     <div class="alert numbers-left" role="status">
-      {low.map((series) => {
-        const left = props.left[series];
-        if (left > 0) return <p>{`${SERIES_NAMES[series]}: noch ${left} ${left === 1 ? "Startnummer" : "Startnummern"} frei.`}</p>;
-        return (
-          <p>
-            {`${SERIES_NAMES[series]}: keine Startnummer mehr frei. Neue Anmeldungen werden abgelehnt. `}
-            <a href={nextNumbersSectionPath(props.race)}>Nächste Startnummer setzen</a>
-          </p>
-        );
-      })}
+      {low.map((series) => (
+        <p>
+          <NumbersLeft race={props.race} series={series} left={props.left[series]} />
+        </p>
+      ))}
     </div>
   );
 }
@@ -134,6 +178,7 @@ function RaceHeader(props: { race: RaceWithToggle; count: number }) {
       </p>
       <p class="race-settings">
         <a href={settingsPath(props.race)}>Einstellungen (Name, Datum, Startnummern)</a>
+        <a href={deskPath(props.race)}>Anmeldetisch</a>
       </p>
     </>
   );
@@ -191,13 +236,14 @@ export function raceRegistrationsPage(
 
 /**
  * The search field above the list, for the Race desk. Hidden until its script
- * (src/client/race-search.ts) runs, so without JavaScript the page shows just the whole list.
+ * (src/client/race-search.ts) runs, so without JavaScript the page shows just
+ * the whole list; with `autofocus`, the script puts the cursor in it.
  */
-function RegistrationSearch() {
+export function RegistrationSearch(props: { autofocus?: boolean }) {
   return (
     <div class="field reg-search" hidden>
       <label class="label" for={SEARCH_FIELD_ID}>Startnummer oder Name</label>
-      <input type="search" id={SEARCH_FIELD_ID} autocomplete="off" />
+      <input type="search" id={SEARCH_FIELD_ID} autocomplete="off" autofocus={props.autofocus} />
       <p class="muted reg-none" role="status" hidden>Keine passende Anmeldung.</p>
     </div>
   );
@@ -229,19 +275,20 @@ export function deleteRacePage(c: Context<AppEnv>, race: Race, count: number, er
 
 /** Asks before a Registration is deleted; posting the form deletes it. */
 export function deleteRegistrationPage(c: Context<AppEnv>, race: Race, registration: StoredRegistration) {
+  const from = openedFrom(c);
   return c.html(
     <AdminPage url={c.req.url} title="Anmeldung löschen" admin={c.get("adminEmail")}>
-      <p><a href={racePath(race)}>← {race.name}</a></p>
+      <BackTo race={race} page={from} />
       <h1>Anmeldung löschen?</h1>
       <ul class="reg-list">
         <RegistrationCard race={race} registration={registration} />
       </ul>
       <p>Die Anmeldung und alle Angaben dazu werden gelöscht. Die Startnummer {registration.number} wird nicht neu vergeben.</p>
-      <form method="post" action={deleteRegistrationPath(race, registration)}>
+      <form method="post" action={deleteRegistrationPath(race, registration, from)}>
         <RegistrationField registration={registration} />
         <button type="submit" class="btn btn-danger">Endgültig löschen</button>
       </form>
-      <p class="cancel"><a href={racePath(race)}>Abbrechen</a></p>
+      <CancelTo race={race} page={from} />
     </AdminPage>,
   );
 }

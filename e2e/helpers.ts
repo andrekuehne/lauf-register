@@ -38,6 +38,9 @@ export function raceCard(page: Page, raceLink: string): Locator {
 /** The Race's admin page, with its list of Registrations (the same token as the public link). */
 export const adminRacePath = (raceLink: string) => `/admin/races/${raceLink.slice("/r/".length)}`;
 
+/** The Race's Anmeldetisch: the Race desk's screen for finding Registrations. */
+export const deskPath = (raceLink: string) => `${adminRacePath(raceLink)}/desk`;
+
 /** The step of the flow on screen (the others are hidden). */
 export const currentStep = (page: Page): Locator => page.locator("section[data-step]:visible");
 
@@ -96,8 +99,8 @@ export async function adminRegistration(page: Page, raceLink: string, number: st
   return page.locator(`li[data-registration="${number}"]`);
 }
 
-/** A Participant as the registration flow sends it. */
-export type SentParticipant = { gender: "F" | "M"; firstName: string; lastName: string; birthYear: number };
+/** A Participant as the registration flow sends it; without a Title or club unless given. */
+export type SentParticipant = { gender: "F" | "M"; firstName: string; lastName: string; birthYear: number; title?: "none" | "dr"; club?: string | null };
 
 /**
  * Registers straight through the endpoint the registration flow posts to,
@@ -109,7 +112,7 @@ export async function registerDirectly(page: Page, raceLink: string, participant
       attemptId: crypto.randomUUID(),
       duration,
       consent: true,
-      participants: participants.map((p) => ({ ...p, title: "none", club: null })),
+      participants: participants.map((p) => ({ title: "none", club: null, ...p })),
     },
   });
   expect(res.status()).toBe(200);

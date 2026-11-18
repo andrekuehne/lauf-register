@@ -7,6 +7,7 @@ import {
   adminRacePath,
   asAdmin,
   atClock,
+  deskPath,
   newRace,
   ORIGIN,
   postRace,
@@ -239,7 +240,8 @@ describe("database rows read on race day", () => {
   // about 350, the settings page about 260, the start page about 150), and sits
   // far below what it read while every number of the Race was looked up and
   // each Registration's Participants one at a time (2,700, 4,700, 3,100 and 3,300).
-  it("with 150 Registrations in an open Race: the Race page reads fewer than 450 rows, the settings page 500, the start page 2,000, a submit 100", async () => {
+  // The Anmeldetisch reads what the Race page reads.
+  it("with 150 Registrations in an open Race: the Race page reads fewer than 450 rows, the Anmeldetisch no more than it, the settings page 500, the start page 2,000, a submit 100", async () => {
     const link = await newRace("Nikolauslauf", "2026-12-09", { firstSingleNumber: 181, firstPairNumber: 1061 });
     expect((await postReserve(link, "1-180")).status).toBe(303);
     expect((await postReserve(link, "1001-1060")).status).toBe(303);
@@ -247,7 +249,9 @@ describe("database rows read on race day", () => {
       expect((await submit(link, i % 4 === 3 ? pairRegistration() : registration())).status).toBe(200);
     }
 
-    expect(await rowsReadByAdmin(adminRacePath(link))).toBeLessThan(450);
+    const racePage = await rowsReadByAdmin(adminRacePath(link));
+    expect(racePage).toBeLessThan(450);
+    expect(await rowsReadByAdmin(deskPath(link))).toBeLessThanOrEqual(racePage);
     expect(await rowsReadByAdmin(settingsPath(link))).toBeLessThan(500);
     expect(await rowsReadByAdmin("/admin")).toBeLessThan(2000);
     expect(await rowsReadBySubmit(link, registration())).toBeLessThan(100);

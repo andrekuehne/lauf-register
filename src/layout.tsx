@@ -14,6 +14,8 @@ type LayoutProps = {
   heading?: Child;
   /** The admin area is German only and hides the Deutsch / English switch. */
   languageSwitch?: boolean;
+  /** Uses the width of a tablet or laptop rather than a phone's (the Anmeldetisch). */
+  wide?: boolean;
   children: Child;
 };
 
@@ -50,7 +52,7 @@ export function Layout(props: LayoutProps) {
           <title>{props.title ? `${props.title} – ${appName}` : appName}</title>
           <style>{raw(styles)}</style>
         </head>
-        <body>
+        <body class={props.wide ? "wide" : undefined}>
           <header class="top">
             <p class="top-title">{props.heading ?? appName}</p>
             {props.languageSwitch !== false && (

@@ -15,6 +15,16 @@ const phone = (device: string, width: number) => ({
   viewport: { width, height: 740 },
 });
 
+/** The Anmeldetisch's tests: they also run on the Race desk's tablets and laptops, the phone tests don't. */
+const DESK_TESTS = "**/desk.e2e.ts";
+
+/** A Race desk device: a tablet (with touch) or a laptop, in Chromium. */
+const chromiumDesk = (width: number, height: number, hasTouch: boolean) => ({
+  ...devices["Desktop Chrome"],
+  viewport: { width, height },
+  hasTouch,
+});
+
 export default defineConfig({
   testDir: "e2e",
   testMatch: "**/*.e2e.ts",
@@ -32,6 +42,13 @@ export default defineConfig({
     { name: "webkit-320", use: phone("iPhone SE", 320) },
     { name: "chromium-390", use: phone("Pixel 7", 390) },
     { name: "chromium-320", use: phone("Pixel 7", 320) },
+    // A tablet in portrait and in landscape, and a laptop.
+    { name: "webkit-768", testMatch: DESK_TESTS, use: devices["iPad Mini"] },
+    { name: "webkit-1024", testMatch: DESK_TESTS, use: devices["iPad Mini landscape"] },
+    { name: "webkit-1280", testMatch: DESK_TESTS, use: { ...devices["Desktop Safari"], viewport: { width: 1280, height: 800 } } },
+    { name: "chromium-768", testMatch: DESK_TESTS, use: chromiumDesk(768, 1024, true) },
+    { name: "chromium-1024", testMatch: DESK_TESTS, use: chromiumDesk(1024, 768, true) },
+    { name: "chromium-1280", testMatch: DESK_TESTS, use: chromiumDesk(1280, 800, false) },
   ],
   webServer: {
     command: `node scripts/e2e-reset-db.mjs ${STATE} && npx wrangler dev --port ${PORT} --persist-to ${STATE} --var ACCESS_AUD:local-dev`,

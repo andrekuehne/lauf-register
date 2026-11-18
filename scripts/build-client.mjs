@@ -1,7 +1,7 @@
 // Bundles the browser scripts (src/client/) for ~iOS 12 / Android 8 browsers
 // and writes each as a string module the Worker inlines into its pages:
 // the registration flow, the QR layer, the admin pages' confirmation dialogs, and
-// the search on a Race's admin page.
+// the search on a Race's admin page and its Anmeldetisch.
 // Runs before `wrangler dev`/`deploy` (wrangler.jsonc build.command), tests and typecheck.
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";

@@ -11,8 +11,8 @@ import type { AppEnv } from "../language";
 import type { Race } from "../races/races";
 import { validateRegistrationEdit, type RegistrationContent, type RegistrationIssue } from "../registration/registration-input";
 import type { StoredRegistration } from "../registration/registrations";
-import { AdminPage, RegistrationField, SERIES_NAMES } from "./admin-page";
-import { editPath, participantNames, racePath } from "./registrations-page";
+import { AdminPage, openedFrom, RegistrationField, SERIES_NAMES } from "./admin-page";
+import { BackTo, CancelTo, editPath, participantNames } from "./registrations-page";
 
 const t = strings("de").flow;
 
@@ -198,12 +198,13 @@ export const editHeading = (number: number) => `Anmeldung ${number} bearbeiten`;
 export function editRegistrationPage(c: Context<AppEnv>, race: Race, registration: StoredRegistration, values: EditValues, errors: EditErrors = {}) {
   const invalid = Object.keys(errors).length > 0;
   const pair = seriesOf(registration.participants) === "pair";
+  const from = openedFrom(c);
   return c.html(
     <AdminPage url={c.req.url} title={editHeading(registration.number)} admin={c.get("adminEmail")}>
-      <p><a href={racePath(race)}>← {race.name}</a></p>
+      <BackTo race={race} page={from} />
       <h1>{editHeading(registration.number)}</h1>
       {invalid && <p class="alert" role="alert">{errors.form ?? "Bitte die markierten Angaben prüfen."}</p>}
-      <form method="post" action={editPath(race, registration)} novalidate>
+      <form method="post" action={editPath(race, registration, from)} novalidate>
         <RegistrationField registration={registration} />
         <div class="card">
           <TextField name="number" label="Startnummer" value={values.number} errors={errors} digits={4} />
@@ -220,7 +221,7 @@ export function editRegistrationPage(c: Context<AppEnv>, race: Race, registratio
         ))}
         <button type="submit" class="btn">Speichern</button>
       </form>
-      <p class="cancel"><a href={racePath(race)}>Abbrechen</a></p>
+      <CancelTo race={race} page={from} />
     </AdminPage>,
     invalid ? 400 : 200,
   );

@@ -7,7 +7,7 @@ import { formatNumbers } from "../domain/reserved-numbers";
 import type { Race } from "../races/races";
 import type { NextNumbers } from "../registration/next-numbers";
 import type { NextAndReserved } from "../registration/reserved-numbers";
-import { SERIES_NAMES } from "./admin-page";
+import { SERIES_NAMES, type RacePage } from "./admin-page";
 
 /**
  * What the toggle needs besides the Race: whether Registration is open and,
@@ -42,10 +42,11 @@ const question = (race: RaceWithToggle) =>
       ].join("\n");
 
 /**
- * The toggle for `race`. `from: "race"` when shown on the Race's own page, so
- * the Admin returns there after the change; otherwise they return to the start page.
+ * The toggle for `race`. `from` names the Race's own page it is shown on (its
+ * Race page or its Anmeldetisch), so the Admin returns there after the change;
+ * without it they return to the start page.
  */
-export function RegistrationToggle(props: { race: RaceWithToggle; from?: "race" }) {
+export function RegistrationToggle(props: { race: RaceWithToggle; from?: RacePage }) {
   const { race } = props;
   const labelId = `reg-switch-${race.token}`;
   const half = (open: boolean) => {

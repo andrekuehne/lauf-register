@@ -12,7 +12,7 @@ _Avoid_: Event, run
 _German (UI)_: Lauf
 
 **Registration open / closed**:
-Whether participants can register for a Race through its link right now. An Admin opens and closes it by hand; a new Race starts closed. While it is closed, participants register at the Race desk.
+Whether participants can register for a Race through its link right now. An Admin opens and closes it by hand; a new Race starts closed. While it is closed, participants register at the Race desk, where an Admin adds their Registration; an Admin can add Registrations while it is open, too.
 _Avoid_: Active, enabled, published
 _German (UI)_: Anmeldung offen / geschlossen
 
@@ -97,7 +97,8 @@ _German (UI)_: Mögliches Duplikat
 **Race desk**:
 The on-site table where Registrations are checked, bibs are handed out, and people without a phone are registered on a shared device.
 _Avoid_: Check-in, counter
+_German (UI)_: Anmeldetisch
 
 **Admin**:
-An organizer who signs in with their email address to create Races, open or close Registration, correct Registrations, export them, delete them, and delete whole Races.
+An organizer who signs in with their email address to create Races, open or close Registration, add Registrations at the Race desk, correct Registrations, export them, delete them, and delete whole Races.
 _Avoid_: Organizer account, user

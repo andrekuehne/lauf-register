@@ -22,7 +22,7 @@ export function registrationCardText(html: string, number: number): string {
 
 /** The links of a piece of a page: their text and where they go. */
 export function links(html: string): { text: string; href: string }[] {
-  return [...html.matchAll(/<a([^>]*)>([\s\S]*?)<\/a>/g)].map((m) => ({ text: textOf(m[2]!), href: attr(m[1]!, "href") ?? "" }));
+  return [...html.matchAll(/<a(\s[^>]*)?>([\s\S]*?)<\/a>/g)].map((m) => ({ text: textOf(m[2]!), href: attr(m[1] ?? "", "href") ?? "" }));
 }
 
 /** A piece of a page as plain text, the way it reads on screen. */
@@ -53,6 +53,15 @@ export function formFields(html: string, formClass: string): Record<string, stri
     if (name) fields[name] = attr(input[1]!, "value") ?? "";
   }
   return fields;
+}
+
+/** The first form on a page that posts: where it posts to, and the hidden fields it sends besides what the Admin types. */
+export function postedForm(html: string): { action: string; hidden: Record<string, string> } {
+  const form = html.match(/<form([^>]*method="post"[^>]*)>([\s\S]*?)<\/form>/);
+  if (!form) throw new Error("The page has no form that posts");
+  const hidden: Record<string, string> = {};
+  for (const input of form[2]!.matchAll(/<input([^>]*type="hidden"[^>]*)>/g)) hidden[attr(input[1]!, "name") ?? ""] = attr(input[1]!, "value") ?? "";
+  return { action: attr(form[1]!, "action") ?? "", hidden };
 }
 
 export type Toggle = {

@@ -70,12 +70,18 @@ function postForm(path: string, fields: Record<string, string>, headers: Record<
   });
 }
 
+/** Posts an admin form to `path` with exactly these fields, signed in as the test Admin. */
+export const postAsAdmin = (path: string, fields: Record<string, string>) => postForm(path, fields, { "x-test-admin": ADMIN });
+
 export function postRace(fields: Record<string, string>, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
   return postForm("/admin/races", fields, headers);
 }
 
 /** The admin page of the Race behind a public link (its Registrations). */
 export const adminRacePath = (raceLink: string) => `/admin/races/${raceLink.slice("/r/".length)}`;
+
+/** The Race's Anmeldetisch: the Race desk's screen for finding Registrations. */
+export const deskPath = (raceLink: string) => `${adminRacePath(raceLink)}/desk`;
 
 /** The Race's A4 poster with its QR code. */
 export const posterPath = (raceLink: string) => `${adminRacePath(raceLink)}/poster`;
@@ -209,6 +215,13 @@ export async function numberOf(res: Response): Promise<number> {
 export function setRegistration(raceLink: string, open: boolean | string, headers: Record<string, string> = { "x-test-admin": ADMIN }) {
   const value = open === true ? "1" : open === false ? "0" : open;
   return postForm(`${adminRacePath(raceLink)}/registration`, { open: value }, headers);
+}
+
+/** Opens or closes Registration with the toggle on an admin page (its HTML), sending what the toggle's form sends. */
+export function setRegistrationWithToggleOn(pageHtml: string, raceLink: string, open: boolean) {
+  const fields = formFields(pageHtml, "reg-switch");
+  if (!fields) throw new Error("The page has no toggle");
+  return postAsAdmin(`${adminRacePath(raceLink)}/registration`, { ...fields, open: open ? "1" : "0" });
 }
 
 /** Opens or closes Registration from the Race's own admin page, as its toggle there does. */

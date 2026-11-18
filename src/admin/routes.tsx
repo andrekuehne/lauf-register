@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { csrf } from "hono/csrf";
 import { raceResultFileName, raceResultRows, RACERESULT_SHEET } from "../export/raceresult";
 import { XLSX_CONTENT_TYPE, xlsxWorkbook } from "../export/xlsx";
+import type { SingleOrPair } from "../domain/categories";
 import { parseReservedRange } from "../domain/reserved-numbers";
 import { strings } from "../i18n";
 import type { AppEnv } from "../language";
@@ -31,7 +32,8 @@ import { numbersLeft, setNextNumbers } from "../registration/next-numbers";
 import { nextAndReservedNumbers, removeReservedNumbers, reserveNumbers } from "../registration/reserved-numbers";
 import { normalizedText } from "../shared/same-text";
 import { QrButton, QrLayers } from "../ui/qr-layer";
-import { AdminPage, problemPage, REGISTRATION_FIELD, registrationCount } from "./admin-page";
+import { AdminPage, openedFrom, problemPage, racePageFrom, REGISTRATION_FIELD, registrationCount, type RacePage } from "./admin-page";
+import { deskPage } from "./desk-page";
 import { checkEdit, editHeading, editRegistrationPage, numberReservedError, numberTakenError, postedValues, storedValues } from "./edit-page";
 import type { AdminIdentity } from "./identity";
 import { posterPage } from "./poster-page";
@@ -44,13 +46,14 @@ import {
   type NextNumbersSectionState,
   type ReservedSectionState,
 } from "./race-settings-page";
-import { RegistrationToggle, type ToggleState } from "./registration-toggle";
+import { RegistrationToggle, type RaceWithToggle, type ToggleState } from "./registration-toggle";
 import {
   deleteRacePage,
   deleteRegistrationPage,
   deleteRegistrationPath,
   editPath,
   nextNumbersSectionPath,
+  racePagePath,
   racePath,
   raceRegistrationsPage,
   settingsPath,
@@ -164,8 +167,11 @@ function withRegistration(c: Context<AppEnv>, then: (race: Race, registration: S
 /** The Registration a posted edit form or delete confirmation was opened for: the id in its RegistrationField. */
 const formRegistrationId = (form: Record<string, unknown>) => wholeNumber(form[REGISTRATION_FIELD]);
 
-/** A page with a form posted for one Registration, and how a link to it under the Registration's new number reads. */
-type FormPage = { path: (race: Race, registration: StoredRegistration) => string; link: (number: number) => string };
+/**
+ * A page with a form posted for one Registration, opened from one of the Race's
+ * own pages, and how a link to it under the Registration's new number reads.
+ */
+type FormPage = { path: (race: Race, registration: StoredRegistration, from: RacePage) => string; link: (number: number) => string };
 
 const EDIT_PAGE: FormPage = { path: editPath, link: editHeading };
 const DELETE_PAGE: FormPage = { path: deleteRegistrationPath, link: (number) => `Anmeldung ${number} löschen …` };
@@ -189,7 +195,7 @@ function withPostedForm(
     const moved = id === null ? null : await findRegistrationById(c.env.DB, race.id, id);
     if (!moved) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
     return problemPage(c, `Diese Anmeldung hat inzwischen die Startnummer ${moved.number}.`, 409, {
-      href: page.path(race, moved),
+      href: page.path(race, moved, openedFrom(c)),
       text: page.link(moved.number),
     });
   });
@@ -215,6 +221,32 @@ async function settingsPage(
   if (!found) return problemPage(c, RACE_NOT_FOUND, 404);
   const { next, reserved } = found;
   return raceSettingsPage(c, race, form.values, form.errors, { ...shows.next, next }, { ...shows.reserved, numbers: reserved });
+}
+
+/** A page showing a Race (with its toggle), all its Registrations and the numbers `left` in each series. */
+type RaceRegistrationsPage = (
+  c: Context<AppEnv>,
+  race: RaceWithToggle,
+  registrations: StoredRegistration[],
+  left: Record<SingleOrPair, number>,
+) => Response | Promise<Response>;
+
+/**
+ * Answers with `page` for the Race named by the URL's token, or 404. The Race
+ * page and the Anmeldetisch both show it and are reloaded all day: this is what
+ * either reads from the database, no more.
+ */
+function withRaceRegistrations(c: Context<AppEnv>, page: RaceRegistrationsPage): Promise<Response> {
+  return withRace(c, async (race) => {
+    const [registrations, left, raceWithToggle] = await Promise.all([
+      listRegistrations(c.env.DB, race.id),
+      numbersLeft(c.env.DB, race.id),
+      withToggleState(c.env.DB, race),
+    ]);
+    // Deleted by another Admin in the meantime.
+    if (!left || !raceWithToggle) return problemPage(c, RACE_NOT_FOUND, 404);
+    return page(c, raceWithToggle, registrations, left);
+  });
 }
 
 /** Runs `then` with the Race named by the URL's token, or answers 404. */
@@ -265,22 +297,14 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
       const found = await setRegistrationOpen(c.env.DB, race.token, open === "1");
       if (!found) return problemPage(c, RACE_NOT_FOUND, 404);
       // Back to the page the toggle was on.
-      return c.redirect(from === "race" ? racePath(race) : "/admin", 303);
+      const back = racePageFrom(from);
+      return c.redirect(back ? racePagePath(race, back) : "/admin", 303);
     }),
   );
 
-  admin.get("/races/:token", (c) =>
-    withRace(c, async (race) => {
-      const [registrations, left, raceWithToggle] = await Promise.all([
-        listRegistrations(c.env.DB, race.id),
-        numbersLeft(c.env.DB, race.id),
-        withToggleState(c.env.DB, race),
-      ]);
-      // Deleted by another Admin in the meantime.
-      if (!left || !raceWithToggle) return problemPage(c, RACE_NOT_FOUND, 404);
-      return raceRegistrationsPage(c, raceWithToggle, registrations, left);
-    }),
-  );
+  admin.get("/races/:token", (c) => withRaceRegistrations(c, raceRegistrationsPage));
+
+  admin.get("/races/:token/desk", (c) => withRaceRegistrations(c, deskPage));
 
   admin.get("/races/:token/settings", (c) => withRace(c, async (race) => settingsPage(c, race)));
 
@@ -383,7 +407,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
         return editRegistrationPage(c, race, registration, values, numberTakenError(checked.number, other));
       }
       if (result === "number reserved") return editRegistrationPage(c, race, registration, values, numberReservedError(checked.number));
-      return c.redirect(racePath(race), 303);
+      return c.redirect(racePagePath(race, openedFrom(c)), 303);
     }),
   );
 
@@ -395,7 +419,7 @@ export function adminRoutes(identity: AdminIdentity, now: () => Date) {
     withPostedForm(c, DELETE_PAGE, async (race, registration) => {
       // Deleted by another Admin in the meantime: say so.
       if (!(await deleteRegistration(c.env.DB, race.id, registration.id))) return problemPage(c, REGISTRATION_NOT_FOUND, 404);
-      return c.redirect(racePath(race), 303);
+      return c.redirect(racePagePath(race, openedFrom(c)), 303);
     }),
   );
 
