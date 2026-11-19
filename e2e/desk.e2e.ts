@@ -3,7 +3,7 @@
 // (playwright.config.ts).
 
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { consentAndSubmit, deskPath, newRace, registerDirectly, startRegistration, tapNext } from "./helpers";
+import { submitOnCheck, deskPath, newRace, registerDirectly, startRegistration, tapNext } from "./helpers";
 
 const search = (page: Page) => page.getByLabel("Startnummer oder Name");
 /** The numbers of the Registrations the list shows, in order. */
@@ -104,7 +104,7 @@ test.describe("the Anmeldetisch updates itself", () => {
       const page = await phone.newPage();
       await startRegistration(page, raceLink, ["Stundenlauf", "Einzeln", "Frau"], { firstName: "Anna", lastName: "Neumann", birthYear: "1985" });
       await tapNext(page);
-      return await consentAndSubmit(page);
+      return await submitOnCheck(page);
     } finally {
       await phone.close();
     }

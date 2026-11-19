@@ -8,6 +8,7 @@ import { formatRaceDateLong, raceYear } from "../races/race-dates";
 import { publicRacePath } from "../races/race-link";
 import type { AppEnv } from "../language";
 import { Layout } from "../layout";
+import { PRIVACY_PATH } from "../privacy/links";
 import { divisionIconSvg, ICONS } from "../ui/icon-svgs";
 import { Icon } from "../ui/icons";
 import { QrButton, QrLayers } from "../ui/qr-layer";
@@ -191,11 +192,13 @@ export function registrationPage(c: Context<AppEnv>, race: PublicRace) {
           <h2 tabindex={-1}>{t.checkHeading}</h2>
           <div class="summary" id="summary"></div>
           <form id="submit-form" novalidate>
-            <label class="consent">
-              <input type="checkbox" id="consent" />
-              <span>{t.consent}</span>
-            </label>
-            <p class="error" id="consent-error" hidden>{t.consentRequired}</p>
+            {/* No consent asked: a Registration rests on taking part (docs/adr/0007). A new tab keeps the flow where it is. */}
+            <p class="privacy-note">
+              {t.privacyNote}{" "}
+              <a href={PRIVACY_PATH} target="_blank" rel="noopener">
+                {t.privacyLink}
+              </a>
+            </p>
             <p class="alert" id="offline" role="alert" hidden>{t.offline}</p>
             <p class="alert" id="rejected" role="alert" hidden>{t.rejected}</p>
             <p class="alert" id="closed" role="alert" hidden>{t.closed}</p>

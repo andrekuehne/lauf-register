@@ -84,10 +84,9 @@ export async function startRegistration(page: Page, raceLink: string, choices: s
   await fillParticipant(page, participant);
 }
 
-/** On the Check screen: consent, then submit; returns the Registration number shown on the Done screen. */
-export async function consentAndSubmit(page: Page): Promise<string> {
+/** On the Check screen: submit; returns the Registration number shown on the Done screen. */
+export async function submitOnCheck(page: Page): Promise<string> {
   await expect(currentStep(page)).toHaveAttribute("data-step", "check");
-  await currentStep(page).getByRole("checkbox").check();
   await currentStep(page).getByRole("button", { name: "Jetzt anmelden" }).tap();
   await expect(currentStep(page)).toHaveAttribute("data-step", "done");
   return (await page.locator("#done-number").textContent()) ?? "";
@@ -111,7 +110,6 @@ export async function registerDirectly(page: Page, raceLink: string, participant
     data: {
       attemptId: crypto.randomUUID(),
       duration,
-      consent: true,
       participants: participants.map((p) => ({ title: "none", club: null, ...p })),
     },
   });

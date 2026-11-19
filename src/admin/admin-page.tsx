@@ -15,7 +15,7 @@ import type { StoredRegistration } from "../registration/registrations";
  */
 export function AdminPage(props: { url: string; title?: string; admin?: string; wide?: boolean; children: Child }) {
   return (
-    <Layout lang="de" url={props.url} title={props.title ?? "Admin"} heading="Lauf-Register · Admin" languageSwitch={false} wide={props.wide}>
+    <Layout lang="de" url={props.url} title={props.title ?? "Admin"} heading="Lauf-Register · Admin" languageSwitch={false} legalLinks={false} wide={props.wide}>
       {props.admin && <p class="muted admin-who">Angemeldet als {props.admin}</p>}
       {props.children}
       <script>{raw(confirmBundle)}</script>

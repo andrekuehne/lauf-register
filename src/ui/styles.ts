@@ -83,8 +83,10 @@ border:2px solid var(--line);border-radius:24px;background:#fff;font-weight:600;
 .sum-person:first-of-type{border-top:0}
 .sum-person b{display:block;font-size:1.1rem}
 .sum-person span{display:block;color:var(--muted)}
-.consent{display:flex;align-items:flex-start;padding:12px;background:var(--card);border-radius:12px;cursor:pointer}
-.consent input{flex-shrink:0;width:28px;height:28px;margin:2px 12px 0 0}
+.privacy-note{color:var(--muted);font-size:.95rem}
+.privacy-note a,.legal-links a{color:var(--accent)}
+.legal-links{max-width:34rem;margin:0 auto;padding:0 16px 24px;color:var(--muted);font-size:.9rem}
+.legal h2{font-size:1.15rem;margin:22px 0 8px}
 .done{margin-top:20px;padding:24px 16px;text-align:center;color:#fff;background:var(--c);border-radius:16px}
 .done .ico{margin:0 auto 8px;width:64px;height:64px;background:#fff;color:var(--c)}
 .done .ico svg{width:40px;height:40px}

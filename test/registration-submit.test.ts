@@ -26,6 +26,12 @@ describe("submitting a Registration", () => {
     });
   });
 
+  it("still stores a Registration from a flow opened before consent was dropped, which sends `consent`", async () => {
+    const race = await newRace("Stundenlauf");
+
+    expect(await numberOf(await submit(race, registration({ consent: true })))).toBe(1);
+  });
+
   it("answers with a Pair's Division and both Participants in entered order", async () => {
     const race = await newRace("Stundenlauf");
 
@@ -175,7 +181,6 @@ describe("validating a submit", () => {
     ["no attempt ID", registration({ attemptId: undefined }), "attemptId"],
     ["a malformed attempt ID", registration({ attemptId: "<script>" }), "attemptId"],
     ["an unknown Duration", registration({ duration: 45 }), "duration"],
-    ["consent not ticked", registration({ consent: false }), "consent"],
     ["no Participants", registration({ participants: undefined }), "participants"],
     ["an empty Participant list", registration({ participants: [] }), "participants"],
     ["three Participants", registration({ participants: [anna, ben, clara] }), "participants"],

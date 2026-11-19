@@ -46,7 +46,6 @@ type State = {
   /** Mixed pair: the first person's chosen Gender; the second person's is the opposite. */
   mixedFirstGender?: Gender;
   participants: [Participant, Participant];
-  consent: boolean;
   /** Sent with every submit of this Registration; a repeat returns the same Registration. */
   attemptId: string;
   /** The Registration as stored, once submitted: the Done screen shows this, not what was entered. */
@@ -108,7 +107,7 @@ function emptyParticipant(): Participant {
 }
 
 function freshState(): State {
-  return { participants: [emptyParticipant(), emptyParticipant()], consent: false, attemptId: newAttemptId() };
+  return { participants: [emptyParticipant(), emptyParticipant()], attemptId: newAttemptId() };
 }
 
 // ---------- persistence (sessionStorage may be unavailable) ----------
@@ -468,8 +467,6 @@ function renderCheck() {
     if (hint) row.appendChild(el("p", "hint", hint));
     summary.appendChild(row);
   });
-  (byId("consent") as HTMLInputElement).checked = state.consent;
-  show(byId("consent-error"), false);
   hideSubmitAlerts();
 }
 
@@ -505,10 +502,6 @@ function timeout(ms: number): Promise<never> {
 }
 
 async function submit() {
-  if (!state.consent) {
-    show(byId("consent-error"), true);
-    return;
-  }
   // „No connection“ stays until the answer: the button says „Erneut senden“ meanwhile.
   REFUSED_ALERTS.forEach((id) => show(byId(id), false));
   setSending(true);
@@ -516,7 +509,6 @@ async function submit() {
   const payload = {
     attemptId: state.attemptId,
     duration: state.duration,
-    consent: true,
     participants: activeParticipants().map((p, slot) => ({
       gender: slotGender[slot],
       title: p.title,
@@ -695,12 +687,6 @@ all<HTMLFormElement>(".details-form").forEach((form) => {
     go(furthestStep());
   };
 });
-
-byId<HTMLInputElement>("consent").onchange = (event) => {
-  state.consent = (event.target as HTMLInputElement).checked;
-  if (state.consent) show(byId("consent-error"), false);
-  save();
-};
 
 byId("submit-form").onsubmit = (event) => {
   event.preventDefault();

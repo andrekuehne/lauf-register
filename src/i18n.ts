@@ -19,6 +19,7 @@ type Choice = { name: string; detail: string };
 
 const de = {
   appName: "Lauf-Register",
+  legal: { privacy: "Datenschutz", imprint: "Impressum" },
   home: {
     text: "Die Anmeldung zum Lauf ist hier bald möglich.",
   },
@@ -82,9 +83,8 @@ const de = {
     checkHeading: "Bitte prüfen",
     age: "{age} Jahre",
     noClub: "ohne Verein",
-    consent:
-      "Einverstanden: Diese Angaben werden für Zeitmessung und Ergebnisliste verwendet und spätestens 30 Tage nach dem Lauf gelöscht.",
-    consentRequired: "Bitte bestätige das Einverständnis.",
+    privacyNote: "Deine Angaben verwenden wir für Startnummer, Zeitmessung und Ergebnisliste.",
+    privacyLink: "Datenschutzhinweise",
     submit: "Jetzt anmelden",
     submitting: "Wird gesendet …",
     offline: "Keine Verbindung. Deine Angaben bleiben gespeichert.",
@@ -115,6 +115,7 @@ export type FlowStrings = Strings["flow"];
 
 const en: Strings = {
   appName: "Lauf-Register",
+  legal: { privacy: "Privacy", imprint: "Imprint" },
   home: {
     text: "Registration for the race will open here soon.",
   },
@@ -176,9 +177,8 @@ const en: Strings = {
     checkHeading: "Please check",
     age: "{age} years",
     noClub: "no club",
-    consent:
-      "I agree: these details are used for timing and the results list and deleted no later than 30 days after the race.",
-    consentRequired: "Please confirm your consent.",
+    privacyNote: "We use your details for the start number, timing and the results list.",
+    privacyLink: "Privacy notice",
     submit: "Register now",
     submitting: "Sending …",
     offline: "No connection. Your details are kept.",

@@ -2,6 +2,7 @@ import { raw } from "hono/html";
 import type { Child } from "hono/jsx";
 import { LANG_NAMES, LANGS, strings, type Lang } from "./i18n";
 import { languageSwitchHref } from "./language";
+import { IMPRINT_URL, PRIVACY_PATH } from "./privacy/links";
 import { styles } from "./ui/styles";
 
 type LayoutProps = {
@@ -16,6 +17,8 @@ type LayoutProps = {
   languageSwitch?: boolean;
   /** Uses the width of a tablet or laptop rather than a phone's (the Anmeldetisch). */
   wide?: boolean;
+  /** Links to the privacy notice and the Impressum at the bottom; the admin area leaves them out. */
+  legalLinks?: boolean;
   children: Child;
 };
 
@@ -62,6 +65,11 @@ export function Layout(props: LayoutProps) {
             )}
           </header>
           <main>{props.children}</main>
+          {props.legalLinks !== false && (
+            <footer class="legal-links">
+              <a href={PRIVACY_PATH}>{strings(props.lang).legal.privacy}</a> · <a href={IMPRINT_URL}>{strings(props.lang).legal.imprint}</a>
+            </footer>
+          )}
         </body>
       </html>
     </>

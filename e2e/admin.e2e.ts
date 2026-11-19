@@ -2,7 +2,7 @@
 // and editing a Registration's number, in the same phone-sized browsers as the registration flow.
 
 import { expect, test, type Dialog, type Locator, type Page } from "@playwright/test";
-import { adminRacePath, adminRegistration, consentAndSubmit, newRace, raceCard, startRegistration, tapNext } from "./helpers";
+import { adminRacePath, adminRegistration, submitOnCheck, newRace, raceCard, startRegistration, tapNext } from "./helpers";
 
 /** Taps a half of the toggle in `scope`, answers the question that follows, and returns what it asked. */
 async function tapToggle(page: Page, scope: Locator, half: "Offen" | "Geschlossen", answer: "OK" | "Abbrechen"): Promise<string> {
@@ -101,7 +101,7 @@ test("reserving a lost bib: the Admin confirms, and the Registration gets a new 
   const link = await newRace(page);
   await startRegistration(page, link, ["Stundenlauf", "Einzeln", "Frau"], { firstName: "Erika", lastName: "Muster", birthYear: "1985" });
   await tapNext(page);
-  expect(await consentAndSubmit(page)).toBe("1");
+  expect(await submitOnCheck(page)).toBe("1");
 
   await page.goto(adminRacePath(link));
   await page.getByRole("link", { name: /^Einstellungen/ }).tap();
@@ -129,7 +129,7 @@ test("editing a Registration's number: the list shows it under the new one", asy
   const link = await newRace(page);
   await startRegistration(page, link, ["Stundenlauf", "Einzeln", "Frau"], { firstName: "Erika", lastName: "Muster", birthYear: "1985" });
   await tapNext(page);
-  expect(await consentAndSubmit(page)).toBe("1");
+  expect(await submitOnCheck(page)).toBe("1");
 
   const registration = await adminRegistration(page, link, "1");
   await registration.getByRole("link", { name: "Bearbeiten" }).tap();

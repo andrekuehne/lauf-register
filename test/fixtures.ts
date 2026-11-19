@@ -39,7 +39,6 @@ export function registration(overrides: Record<string, unknown> = {}) {
   return {
     attemptId: freshAttemptId(),
     duration: 60,
-    consent: true,
     participants: [anna],
     ...overrides,
   };

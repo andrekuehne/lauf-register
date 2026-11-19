@@ -5,6 +5,8 @@ import { adminRoutes } from "./admin/routes";
 import { strings } from "./i18n";
 import { language, type AppEnv } from "./language";
 import { Layout } from "./layout";
+import { PRIVACY_PATH } from "./privacy/links";
+import { privacyPage } from "./privacy/privacy-page";
 import { raceYear } from "./races/race-dates";
 import { findRaceByToken } from "./races/races";
 import { SUBMIT_ERRORS } from "./registration/flow-config";
@@ -30,6 +32,8 @@ export function createApp(deps: { identity: AdminIdentity; now: () => Date }) {
       </Layout>,
     );
   });
+
+  app.get(PRIVACY_PATH, privacyPage);
 
   app.route("/admin", adminRoutes(deps.identity, deps.now));
 

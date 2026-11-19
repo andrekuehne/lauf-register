@@ -5,7 +5,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   adminRegistration,
-  consentAndSubmit,
+  submitOnCheck,
   currentStep,
   fillParticipant,
   newRace,
@@ -28,7 +28,7 @@ test.describe("a Registration end to end", () => {
     await tapNext(page);
     await expect(currentStep(page)).toContainText("Dr. Anna Muster");
     await expect(currentStep(page)).toContainText("Frauen · Stundenlauf");
-    const number = await consentAndSubmit(page);
+    const number = await submitOnCheck(page);
 
     expect(number).toBe("1");
     await expect(currentStep(page)).toContainText("Dr. Anna Muster");
@@ -53,7 +53,7 @@ test.describe("a Registration end to end", () => {
     await expect(currentStep(page).getByLabel(/^Verein/)).toHaveValue("TSV Süd");
     await fillParticipant(page, { firstName: "Emil", lastName: "Exempel", birthYear: "1988" });
     await tapNext(page);
-    const number = await consentAndSubmit(page);
+    const number = await submitOnCheck(page);
 
     expect(number).toBe("1001");
     await expect(currentStep(page)).toContainText("Männer-Paar · Halbstundenlauf");
@@ -68,7 +68,7 @@ test.describe("a Registration end to end", () => {
 
     await startRegistration(page, race, ANNA_SINGLE, anna);
     await tapNext(page);
-    expect(await consentAndSubmit(page)).toBe("7");
+    expect(await submitOnCheck(page)).toBe("7");
 
     // A second phone: its own flow from the start.
     const phone = await context.newPage();
@@ -76,7 +76,7 @@ test.describe("a Registration end to end", () => {
     await tapNext(phone);
     await fillParticipant(phone, { firstName: "Emil", lastName: "Exempel", birthYear: "1988" });
     await tapNext(phone);
-    expect(await consentAndSubmit(phone)).toBe("1023");
+    expect(await submitOnCheck(phone)).toBe("1023");
   });
 
   test("mixed Pair: the first Participant chooses a Gender, the second gets the other one", async ({ page }) => {
@@ -95,7 +95,7 @@ test.describe("a Registration end to end", () => {
     await expect(currentStep(page).getByText("Ergibt sich aus Person 1")).toBeVisible();
     await fillParticipant(page, { firstName: "Clara", lastName: "Probe", birthYear: "1992" });
     await tapNext(page);
-    const number = await consentAndSubmit(page);
+    const number = await submitOnCheck(page);
 
     expect(number).toBe("1001");
     await expect(currentStep(page)).toContainText("Mixed-Paar · Stundenlauf");
@@ -106,9 +106,8 @@ test.describe("a Registration end to end", () => {
 });
 
 test.describe("no number left", () => {
-  /** Consent and „Jetzt anmelden“ on the Check screen, without waiting for the Done screen. */
+  /** „Jetzt anmelden“ on the Check screen, without waiting for the Done screen. */
   async function trySubmit(phone: Page) {
-    await currentStep(phone).getByRole("checkbox").check();
     await currentStep(phone).getByRole("button", { name: "Jetzt anmelden" }).tap();
   }
 
@@ -123,7 +122,7 @@ test.describe("no number left", () => {
     const phone = await page.context().newPage();
     await startRegistration(phone, race, ANNA_SINGLE, anna);
     await tapNext(phone);
-    expect(await consentAndSubmit(phone)).toBe("999");
+    expect(await submitOnCheck(phone)).toBe("999");
     await another(phone);
     await startRegistration(phone, race, ANNA_SINGLE, { ...anna, firstName: "Erika" });
     await tapNext(phone);
@@ -151,7 +150,7 @@ test.describe("no number left", () => {
       await tapNext(page);
     };
     await enterPair();
-    expect(await consentAndSubmit(page)).toBe("1999");
+    expect(await submitOnCheck(page)).toBe("1999");
     await another(page);
     await enterPair();
 
@@ -170,7 +169,6 @@ test("a submit whose answer got lost, sent again with a changed name: the confir
     await route.fetch();
     await route.abort();
   }, { times: 1 });
-  await currentStep(page).getByRole("checkbox").check();
   await currentStep(page).getByRole("button", { name: "Jetzt anmelden" }).tap();
   await expect(currentStep(page).getByText("Keine Verbindung")).toBeVisible();
 
@@ -244,16 +242,16 @@ test.describe("entered data is kept", () => {
   });
 });
 
-test("consent is required before submitting", async ({ page }) => {
+test("the Check screen links the privacy notice, in a new tab, and asks for no consent", async ({ page }) => {
   const race = await newRace(page);
   await startRegistration(page, race, ["Stundenlauf", "Einzeln", "Mann"], { firstName: "Ben", lastName: "Beispiel", birthYear: "1990" });
   await tapNext(page);
 
-  await currentStep(page).getByRole("button", { name: "Jetzt anmelden" }).tap();
-
-  await expect(currentStep(page).getByText("Bitte bestätige das Einverständnis.")).toBeVisible();
-  await expect(currentStep(page)).toHaveAttribute("data-step", "check");
-  expect(await consentAndSubmit(page)).toBe("1");
+  await expect(currentStep(page).getByRole("checkbox")).toHaveCount(0);
+  const link = currentStep(page).getByRole("link", { name: "Datenschutzhinweise" });
+  await expect(link).toHaveAttribute("href", "/datenschutz");
+  await expect(link).toHaveAttribute("target", "_blank");
+  expect(await submitOnCheck(page)).toBe("1");
 });
 
 test.describe("an unusual age gets a hint to check, without blocking", () => {
@@ -274,7 +272,7 @@ test.describe("an unusual age gets a hint to check, without blocking", () => {
       await tapNext(page);
       await expect(currentStep(page)).toHaveAttribute("data-step", "check");
       await expect(currentStep(page).getByText(`Alter ${age} – bitte prüfen`)).toBeVisible();
-      expect(await consentAndSubmit(page)).toBe("1");
+      expect(await submitOnCheck(page)).toBe("1");
     });
   }
 });

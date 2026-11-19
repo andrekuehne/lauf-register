@@ -1,6 +1,7 @@
-// The daily cleanup: personal data doesn't outlive the Race. The consent text
-// promises deletion no later than 30 days after the race, so a Race goes on
-// the 30th day after its date, counted in the organizers' time zone.
+// The daily cleanup: personal data doesn't outlive the Race. The privacy notice
+// (src/privacy/privacy-page.tsx) promises deletion no later than 30 days after
+// the race, so a Race goes on the 30th day after its date, counted in the
+// organizers' time zone. D1's backups keep it 7 more days, as the notice says.
 
 import { dateInRaceTimeZone, daysBefore } from "./race-dates";
 import { deleteRacesDatedUpTo } from "./races";

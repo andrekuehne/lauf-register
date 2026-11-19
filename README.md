@@ -116,7 +116,7 @@ The browser scripts live in `src/client/`: the registration flow (`flow.ts`), th
 
 ## Data deletion
 
-Admins delete a Race (with all its Registrations) from the Race's admin page after typing its name. Anything left over is deleted by a daily cron trigger (`triggers` in `wrangler.jsonc`, 02:00 UTC): every Race whose date is 30 or more days past, counted in German time, as the consent text promises. Each run logs how many Races it deleted (Workers Logs). To fire it by hand locally: `npx wrangler dev --test-scheduled`, then open `http://localhost:8787/__scheduled`.
+Admins delete a Race (with all its Registrations) from the Race's admin page after typing its name. Anything left over is deleted by a daily cron trigger (`triggers` in `wrangler.jsonc`, 02:00 UTC): every Race whose date is 30 or more days past, counted in German time, as the privacy notice (`/datenschutz`) promises. Each run logs how many Races it deleted (Workers Logs). To fire it by hand locally: `npx wrangler dev --test-scheduled`, then open `http://localhost:8787/__scheduled`.
 
 ## Database migrations
 

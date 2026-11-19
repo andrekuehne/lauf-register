@@ -58,9 +58,9 @@ export function validateRegistrationInput(body: unknown, raceYear: number): Regi
   const issues: RegistrationIssue[] = [];
   const issue = (path: string, message: string) => issues.push({ path, message });
 
-  const { attemptId, consent } = body;
+  // A `consent` field, as flows opened before docs/adr/0007 still send, is ignored.
+  const { attemptId } = body;
   if (!isAttemptId(attemptId)) issue("attemptId", "attempt ID is missing or malformed");
-  if (consent !== true) issue("consent", "consent must be ticked");
   const content = checkContent(body, raceYear, issue);
 
   if (issues.length > 0 || !content) return { ok: false, issues };
